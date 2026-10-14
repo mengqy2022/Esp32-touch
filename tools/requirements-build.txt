@@ -1,0 +1,4 @@
+-r requirements.txt
+# Version used for the validated Windows executable. Transitive dependencies
+# are resolved by pip; this is not a complete, hash-locked environment.
+pyinstaller==6.22.3

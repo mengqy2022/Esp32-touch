@@ -34,4 +34,23 @@ If you plan to publish or commercially redistribute the repository, independentl
 
 ## Project-level license
 
-No project-level `LICENSE` was selected automatically. Add one only after deciding how you want others to use your own firmware code.
+The repository already contains an [MIT LICENSE](../LICENSE); it is retained by
+this update. Its copyright attribution still contains a placeholder and should
+be completed by the maintainer with the appropriate rights-holder information.
+
+## Windows companion packaging
+
+- Python runtime: Python Software Foundation license and included upstream notices.
+- pyserial 3.5: BSD license; see the installed package/upstream license.
+- PyInstaller 6.22.3: GPL with its distribution/bundling exception. The exception
+  permits distribution of packaged applications under their own licenses; retain
+  the applicable packaging/runtime notices when shipping a binary release.
+- Build-time dependencies and PyInstaller hooks: inspect the exact resolved
+  dependency licenses for the environment used to create each release.
+- NVIDIA NVML is accessed from the user's installed GPU driver. This project
+  does not bundle the NVIDIA library or a driver installer.
+
+The EXE does not embed a commercial GUI toolkit. Source-level MIT licensing does
+not replace notices for the Python runtime or other bundled components.
+The generic price JSON contains user-provided assumptions, not an official price
+feed or endorsement by a model vendor.

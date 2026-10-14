@@ -1,182 +1,117 @@
-<p align="center">
-  <img src="docs/images/logo.svg" alt="ESP32 Touch Toolbox logo" width="128"/>
-</p>
+# ESP32 Touch Dashboard & Toolbox
 
-<h1 align="center">ESP32 Touch Toolbox</h1>
-<p align="center">
-  <b>Vocab Lab · PC Monitor · SD Checker · Inventory · Games</b><br/>
-  A professional, offline-first touch firmware for ESP32 + 2.8" ILI9341 color LCD
-</p>
+[![ESP-IDF build](https://github.com/mengqy2022/Esp32-s3-touch/actions/workflows/build.yml/badge.svg)](https://github.com/mengqy2022/Esp32-s3-touch/actions/workflows/build.yml)
+[![Host tests](https://github.com/mengqy2022/Esp32-s3-touch/actions/workflows/host-tests.yml/badge.svg)](https://github.com/mengqy2022/Esp32-s3-touch/actions/workflows/host-tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-<p align="center">
-  <a href="https://github.com/<owner>/<repo>/actions/workflows/build.yml"><img src="https://github.com/<owner>/<repo>/actions/workflows/build.yml/badge.svg" alt="ESP-IDF build"/></a>
-  <a href="https://www.espressif.com/en/products/socs/esp32"><img src="https://img.shields.io/badge/ESP--IDF-v5.5.4-3B82F6?logo=espressif&logoColor=white" alt="ESP-IDF v5.5.4"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/LVGL-8.4-8E6CE0" alt="LVGL 8.4"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/board-ESP32--WROOM--32E-16A34A" alt="ESP32-WROOM-32E"/></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22C55E" alt="License: MIT"/></a>
-</p>
+[中文说明](README_CN.md) · [Documentation](docs/README.md) · [Changelog](CHANGELOG.md)
 
-<!-- Replace <owner>/<repo> in the CI badge above with your GitHub repository. -->
+A 320×240 touchscreen dashboard with live PC monitoring, local Codex token
+statistics and estimated CNY costs, plus games, system utilities, inventory
+management and an offline vocabulary lab. A small Windows companion application
+installs per user, starts after login and waits for the USB device automatically.
 
----
+**Hardware target: `esp32`, ESP-IDF 5.5.4, LVGL 8.4.** The repository name is
+historical: the validated device reports ESP32-D0WD-V3, not ESP32-S3. Keep the
+target, pin map and display orientation for this board. Other boards need porting.
 
-## Overview
+## Features
 
-**ESP32 Touch Toolbox** is a complete, polished firmware for the classic
-ESP32-WROOM-32E + ILI9341 2.8" resistive-touch development stack. It bundles
-practical daily tools, study software and entertainment into one device:
+| Area | Current behavior |
+| --- | --- |
+| Home | Date, weekday, Wi-Fi status, clock; CPU/GPU/RAM rings, temperatures and RAM usage. Home stays visible when idle. |
+| CODEX | Today's local input + output tokens; optional personal daily goal; estimated cost such as `~¥12.34`. Usage refreshes about every 5 seconds. |
+| GAME | Sudoku, 2048 and Flappy. |
+| SYSTEM | SD check, system info, Wi-Fi, confirmed touch calibration and PC details. |
+| OTHER | SD-backed inventory/BOM and Vocab Lab with local wordbooks, study plans, spaced review and touchscreen dictation. |
+| Windows companion | Standalone EXE, login startup controls, USB port detection, pause/resume, price configuration and rotating logs. No Python installation needed for end users. |
 
-- **Vocab Lab** — offline vocabulary learning with wordbooks, daily plans,
-  spaced repetition and touchscreen dictation.
-- **PC Monitor** — a desktop-style dashboard: big clock, USB time sync, and
-  live CPU / GPU / MEM usage and temperatures fed from your PC.
-- **Classic tools** — SD card checker, Wi-Fi manager, system info, electronic
-  component inventory (BOM in/out), and a serial file-transfer service.
+PC telemetry requires the companion to run. Games and local utilities remain
+usable independently. GPU data depends on a supported NVIDIA driver; CPU
+temperature is best effort. Unavailable sensors display `--`. PC data expires
+after 5 seconds, Codex data after 90 seconds.
 
-Everything runs offline after setup. No cloud, no accounts, no subscription.
+Codex usage comes from locally retained session logs. It is not a server billing
+or subscription quota API. Prices are user-supplied configuration, with an
+editable default USD/CNY rate of 7.20. Only aggregate telemetry is sent to the
+device; no prompts or credentials are transmitted.
 
-> Vocab Lab takes interaction ideas from common vocabulary apps only —
-> no commercial assets, images, courses or wordbooks are bundled.
-> See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+## Windows quick start
 
-## Highlights
+1. Obtain `ESP32TouchDashboard.exe` from a maintainer's published package or build
+   it using the instructions below. This source repository does not contain EXEs.
+2. Connect the device. Install its USB serial driver if Windows does not expose a
+   COM port; the tested board uses CH340.
+3. Double-click the EXE and accept installation. It installs to
+   `%LOCALAPPDATA%/ESP32TouchDashboard` and enables startup for the current user.
+4. Open **ESP32 Touch Dashboard** from the Start menu to check the startup status,
+   pause/resume monitoring or edit prices. Startup occurs after Windows login.
 
-| | |
-|---|---|
-| 🖥️ **PC Monitor screen** | Large HH:MM:SS clock, date/UTC/time-source line, host link status, CPU/GPU/MEM bars with color-coded thresholds (≥70% amber, ≥90% red) and temperatures. |
-| ⏱️ **USB time sync** | Wall clock synced over Type-C (`PC:TIME`, every 15 s) and a persistent timezone override in NVS — no Wi-Fi required for accurate time. |
-| 💤 **Idle clock** | The menu falls back to the clock dashboard after 2 minutes without touches; tap anywhere to return. |
-| 🛡️ **Calibration guard** | `CALIBRATE` now asks for a confirmation dialog — no more accidental 3-point recalibration. |
-| 📖 **Offline-first Vocab Lab** | Wordbooks live on MicroSD and are streamed row-by-row, keeping RAM usage flat even for multi-thousand-word books. |
-| 🔄 **Graceful serial sharing** | `FILE:` file transfer and `PC:` telemetry coexist on one console UART with a single reader task. |
+See the [Windows user guide](docs/WINDOWS_APP_CN.md) for migration, updates,
+removal and troubleshooting. Pause monitoring before flashing or using another
+serial tool.
 
-## Hardware
+## Build from source
 
-Target stack: **ESP32-WROOM-32E · 2.8" ILI9341 SPI LCD (320×240) ·
-XPT2046 resistive touch · MicroSD (SPI) · common-anode RGB LED.**
+Firmware, in an ESP-IDF 5.5.4 environment:
 
-| Peripheral | GPIOs |
-|---|---|
-| ILI9341 (SCK/MOSI/MISO/CS/DC/BL) | 14 / 13 / 12 / 15 / 2 / 21 |
-| XPT2046 (SCK/MOSI/MISO/CS/IRQ) | 25 / 32 / 39 / 33 / 36 |
-| MicroSD (SCK/MISO/MOSI/CS) | 18 / 19 / 23 / 5 |
-| RGB LED (R/G/B, active-low) | 17 / 22 / 16 |
-| BOOT button (long-press recalibrate) | GPIO0 |
-
-Full pin map, wiring notes and a component BOM:
-**[docs/HARDWARE.md](docs/HARDWARE.md)** — one file, all hardware facts.
-
-## PC Monitor quick start
-
-The dashboard is rendered by the device; the PC only feeds it.
-
-```
-pip install pyserial
-python tools/pc_monitor_host.py            # auto-detects the COM port
-python tools/pc_monitor_host.py --port COM8
-```
-
-- Windows: CPU/MEM via `GetSystemTimes`/`GlobalMemoryStatusEx` (ctypes),
-  GPU via NVIDIA NVML, CPU temperature via WMI (best effort).
-- Linux: `/proc` for CPU/MEM, `nvidia-smi` for GPU.
-- Time + timezone are pushed automatically; the device stores the timezone
-  in NVS and survives reboots.
-
-Wire protocol and field semantics: [docs/PROTOCOL.md](docs/PROTOCOL.md).
-
-## Build & flash
-
-ESP-IDF **v5.5.4**, target `esp32`, LVGL 8.4 via the Component Manager.
-
-```bash
+```sh
 idf.py set-target esp32
 idf.py build
-idf.py -p /dev/ttyUSB0 flash monitor     # Windows: COMx
+idf.py -p COM5 flash
 ```
 
-Shortcuts: `./build_flash.sh <port>` (Linux/macOS) or `build_flash.bat <port>`
-(Windows). On a fresh checkout the first build fetches `managed_components/`
-automatically; `build/`, `sdkconfig` and `managed_components/` stay out of git.
+Use the port assigned to your device; COM5 is only an example. For an existing
+configured build, keep its configuration rather than resetting the target.
 
-> If you upgrade from a checkout built before the PC Monitor merge, run
-> `idf.py fullclean` once so the newly enabled `Montserrat 28` clock font
-> takes effect.
+Windows EXE, with Python 3.11 x64 and PowerShell:
 
-## SD card setup
-
-Copy `sdcard_template/` onto a FAT32 MicroSD card:
-
-```text
-/sdcard/
-├── INVENTORY.CSV           stock: PRODUCT_NO,MODEL,QTY (UTF-8)
-├── BOM_IN/  BOM_OUT/       inventory CSV exchange folders
-└── vocabulary/
-    ├── books/              UTF-8 CSV wordbooks
-    ├── progress/           per-book learning state
-    └── cache/              download scratch space
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build_exe.ps1
 ```
 
-Then on the device: **VOCAB LAB → BOOKS → starter** — or download a
-CET/TOEFL/IELTS book right on the device over Wi-Fi.
+Output: `dist/ESP32TouchDashboard.exe`. The script creates an isolated packaging
+environment and pins pyserial/PyInstaller to the validated versions. Full
+instructions and manual hardware tests are in the [developer guide](docs/DEVELOPMENT.md).
+
+For a source-only host run (Windows or the existing Linux monitoring path):
+
+```sh
+python -m pip install -r tools/requirements.txt
+python tools/pc_monitor_host.py --port COM5 --codex-prices tools/codex_prices.json
+```
+
+The installer, background supervisor and native control dialog are Windows only.
 
 ## Repository layout
 
 ```text
-.
-├── .github/workflows/build.yml    # ESP-IDF v5.5.4 CI, uploads firmware artifacts
-├── main/                          # firmware (ESP-IDF component)
-│   ├── main.c                     # boot, tasks, idle-clock policy
-│   ├── ui.c / ui.h                # LVGL screens + theme + confirmation dialogs
-│   ├── pc_monitor.c / .h          # PC: telemetry protocol + state
-│   ├── vocabulary.c / .h          # Vocab Lab engine + downloader
-│   ├── inventory.c / .h           # BOM stock manager
-│   ├── file_xfer.c / .h           # console-UART FILE: protocol
-│   ├── net_utils.c / .h           # SNTP, geolocation, USB time sync, timezone
-│   ├── wifi_mgr.c / .h            # scan/connect + credential NVS
-│   ├── sd_monitor.c / .h          # SD lifecycle owner
-│   ├── lcd_ili9341.c / .h         # bare-metal LCD driver
-│   ├── xpt2046.c / .h             # touch driver + 3-point calibration
-│   ├── sudoku.c · game2048.c · flappy.c
-│   ├── lv_port.c / .h             # LVGL task, command queue, input timestamps
-│   └── board_pins.h               # single source of truth for GPIOs
-├── tools/
-│   ├── pc_monitor_host.py         # PC Monitor host agent (Windows/Linux)
-│   ├── inventory_tool.py          # GUI serial inventory/BOM manager
-│   ├── vocab_convert.py           # JSON/CSV → device wordbook converter
-│   ├── material_to_inventory.py   # LCSC order CSV → INVENTORY.CSV
-│   └── smoke_test.py / test_parse.py
-├── docs/
-│   ├── HARDWARE.md                # pinout, wiring, BOM
-│   ├── PROTOCOL.md                # FILE: + PC: serial protocols
-│   ├── ARCHITECTURE.md            # tasks, threads, ownership
-│   ├── VOCABULARY.md              # wordbooks, plans, SRS, dictation
-│   ├── PC_MONITOR_CN.md           # PC Monitor 中文手册
-│   └── images/                    # logo + screenshot slots
-└── sdcard_template/               # starter SD card content
+main/                  ESP-IDF firmware, LVGL UI, drivers and tools
+tools/                 Host sender, Codex reader, Windows app and tests
+docs/                  Functionality, app guide, architecture, protocol, roadmap
+sdcard_template/       Public starter inventory/BOM and vocabulary examples
+.github/workflows/     Firmware CI, host tests, manual Windows packaging
+build_exe.ps1          Build the standalone Windows EXE
+start_dashboard.ps1    Install if needed, set daily goal and resume
+stop_dashboard.ps1     Pause monitoring and release the serial port
 ```
 
-## Documentation
+Only source, generic configuration and documentation belong in Git. Generated
+firmware, EXEs, build environments, recovery images and local runtime data are
+excluded. The manual Windows workflow produces a downloadable Actions artifact;
+it does not automatically publish a GitHub Release.
 
-| Doc | What it covers |
-|---|---|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Task model, threading rules, UI dispatch, SD ownership |
-| [docs/HARDWARE.md](docs/HARDWARE.md) | Pinout tables, wiring notes, component BOM |
-| [docs/PROTOCOL.md](docs/PROTOCOL.md) | Console serial wire protocols (`FILE:` and `PC:`) |
-| [docs/VOCABULARY.md](docs/VOCABULARY.md) | Wordbook formats, plans, SRS, dictation |
-| [README_CN.md](README_CN.md) | 中文完整说明 |
-| [CHANGELOG.md](CHANGELOG.md) | Release history |
+## Documentation and contribution
 
-## Contributing & license
+- [System functionality](docs/HOME_DASHBOARD_CN.md)
+- [Windows installation and usage](docs/WINDOWS_APP_CN.md)
+- [Codex counting and pricing](docs/CODEX_USAGE_CN.md)
+- [Architecture](docs/ARCHITECTURE.md) and [serial protocol](docs/PROTOCOL.md)
+- [Hardware](docs/HARDWARE.md) and [vocabulary format](docs/VOCABULARY.md)
+- [Development and release guide](docs/DEVELOPMENT.md)
+- [Validation record](docs/VALIDATION.md) and [future work](docs/ROADMAP_CN.md)
+- [Contribution guidelines](CONTRIBUTING.md)
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the
-ground rules (offline-first, RAM-friendly, no commercial assets).
-
-Licensed under the **MIT License** — see [LICENSE](LICENSE). Third-party
-components and wordbook sources are attributed in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); review it before
-commercial distribution.
-
----
-
-*Original interface concepts: SD checker, Wi-Fi manager, inventory, games.
-Designed and tested on ESP32-WROOM-32E, ILI9341 320×240, XPT2046.*
+MIT license: [LICENSE](LICENSE). Component and wordbook notices:
+[third-party notices](docs/THIRD_PARTY_NOTICES.md). Personal inventory, Codex logs,
+flash backups and account data must remain local.

@@ -22,6 +22,9 @@ typedef enum {
     SCREEN_2048,          // 2048 game
     SCREEN_FLAPPY,        // tap-to-fly pipe game
     SCREEN_PCMON,         // clock + PC CPU/GPU monitor dashboard
+    SCREEN_GAME_MENU,
+    SCREEN_SYSTEM_MENU,
+    SCREEN_OTHER_MENU,
 } ui_screen_t;
 
 void ui_init(void);

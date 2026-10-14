@@ -6,13 +6,14 @@ PC Monitor host agent
 Pushes wall-clock time + CPU / GPU / MEM telemetry from this PC to the ESP32
 device over the Type-C USB-serial port (the same console UART used by the
 FILE: transfer tool). The device renders it on its new PC MONITOR screen
-(big clock + load bars + temperatures).
+(home dashboard + detail view + local Codex daily token usage).
 
 Wire protocol (ASCII lines, one per line, sent TO the device):
     PC:NAME|<hostname>
     PC:TZOFF|<minutes east of UTC>      once at startup
     PC:TIME|<unix seconds>              every 15 s (keeps the clock accurate)
     PC:STAT|<cpu%>|<gpu%>|<cpu_C>|<gpu_C>|<mem%>|<used_MB>|<total_MB>
+    PC:CODEX|<today_tokens>|<personal_daily_goal>|<YYYYMMDD>
 
 Usage:
     pip install pyserial
@@ -37,6 +38,8 @@ import socket
 import subprocess
 import sys
 import time
+
+from codex_usage import CodexUsage, codex_packet, estimate_cny_fen
 
 IS_WINDOWS = platform.system() == "Windows"
 
@@ -324,21 +327,25 @@ def list_ports():
 # ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
-def connect(port):
+def connect(port, baud=BAUD, stop_event=None):
     """Open the port; returns serial object or None after retries."""
     if serial is None:
         print("缺少 pyserial，请先安装：pip install pyserial")
         sys.exit(1)
-    while True:
+    while stop_event is None or not stop_event.is_set():
         try:
-            ser = serial.Serial(port, BAUD, timeout=0.2, write_timeout=2)
+            ser = serial.Serial(port, baud, timeout=0.2, write_timeout=2)
             return ser
         except (serial.SerialException, OSError) as exc:
             print(f"[{port}] 打开失败: {exc} — 3 秒后重试 (Ctrl+C 退出)")
-            time.sleep(3)
+            if stop_event is None:
+                time.sleep(3)
+            else:
+                stop_event.wait(3)
+    return None
 
 
-def main():
+def main(argv=None, stop_event=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", "-p", help="串口名，例如 COM8 或 /dev/ttyUSB0")
@@ -346,7 +353,17 @@ def main():
     ap.add_argument("--interval", type=float, default=1.0,
                     help="遥测发送间隔秒数 (默认 1.0)")
     ap.add_argument("--list-ports", action="store_true", help="列出可用串口后退出")
-    args = ap.parse_args()
+    ap.add_argument("--codex-home", help="Codex 日志目录，默认 CODEX_HOME 或 ~/.codex")
+    ap.add_argument("--codex-daily-goal", type=int, default=0,
+                    help="自设每日 Token 目标，0 表示只显示用量；不是套餐额度")
+    ap.add_argument("--no-codex", action="store_true", help="关闭本机 Codex 日志统计")
+    ap.add_argument('--codex-refresh', type=float, default=5, help='Codex 自动更新间隔秒数，默认 5')
+    ap.add_argument('--codex-prices', help='人民币模型单价 JSON；未配置时金额显示 --')
+    ap.add_argument("--duration", type=float, default=0,
+                    help="运行指定秒数后退出，0 表示持续运行")
+    args = ap.parse_args(argv)
+    if args.codex_daily_goal < 0 or args.interval <= 0 or args.duration < 0 or args.codex_refresh <= 0:
+        ap.error("每日目标和运行时长不能为负，发送间隔必须大于零")
 
     if args.list_ports:
         list_ports()
@@ -366,11 +383,19 @@ def main():
     tmp = CpuTempProbe()
     gpu = GpuProbe()
 
-    ser = connect(port)
+    usage = CodexUsage(args.codex_home)
+    codex_line = None
+    last_codex_read = 0.0
+    ser = connect(port, args.baud, stop_event)
+    if ser is None:
+        return
     last_time_sync = 0.0
     first = True
+    started = time.monotonic()
 
-    while True:
+    while stop_event is None or not stop_event.is_set():
+        if args.duration and time.monotonic() - started >= args.duration:
+            break
         try:
             cpu = perf.cpu_percent()
             mem, mem_used, mem_total = perf.mem_info()
@@ -379,7 +404,6 @@ def main():
 
             now = time.time()
             boot = first or now - last_time_sync >= 15.0
-            first = False
 
             lines = []
             if first:
@@ -391,9 +415,18 @@ def main():
                 lines.append(f"PC:TIME|{int(now)}")
                 last_time_sync = now
             lines.append(f"PC:STAT|{cpu}|{gpu_load}|{cpu_temp}|{gpu_temp}|{mem}|{mem_used}|{mem_total}")
+            if not args.no_codex:
+                if codex_line is None or now - last_codex_read >= args.codex_refresh:
+                    tokens, day = usage.read()
+                    cost = estimate_cny_fen(usage.by_model, args.codex_prices) if args.codex_prices and tokens >= 0 else -1
+                    codex_line = codex_packet(tokens, args.codex_daily_goal, day, cost)
+                    last_codex_read = now
+                    print(f"CODEX| today={tokens} tokens estimated_cny={'--' if cost < 0 else format(cost / 100, '.2f')} date={day}", flush=True)
+                lines.append(codex_line)
 
             for line in lines:
                 ser.write(line.encode("ascii") + b"\n")
+            first = False
             # Drain device log output (ESP_LOG / FILE: lines) so the host-side RX
             # buffer never fills up. Pass it through as "DEV| ..." so both
             # directions of the link stay visible on this console.
@@ -421,14 +454,20 @@ def main():
                 ser.close()
             except Exception:
                 pass
-            ser = connect(port)
+            ser = connect(port, args.baud, stop_event)
+            if ser is None:
+                break
             first = True
             continue
         except KeyboardInterrupt:
             break
 
         try:
-            time.sleep(max(0.1, args.interval - 0.3))
+            delay = max(0.1, args.interval - 0.3)
+            if stop_event is None:
+                time.sleep(delay)
+            else:
+                stop_event.wait(delay)
         except KeyboardInterrupt:
             break
 

@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Home dashboard with CPU/GPU/RAM rings and local Codex daily tokens, optional
+  personal goal and estimated CNY cost (`~¥`).
+- GAME, SYSTEM and OTHER category menus with corresponding BACK navigation.
+- Incremental Codex session-log reader with duplicate, fork, archive and midnight
+  handling; `PC:CODEX` signed 64-bit token/goal/cost telemetry.
+- Windows standalone EXE: per-user installation, login startup controls, USB
+  discovery, pause/resume, price editing and bounded rotating logs.
+- Configurable model input/cache read/cache write/output prices, short/long
+  context estimates and USD/CNY conversion; about 5-second usage refresh.
+- Eight usage/pricing and four device-selection unit tests; manual UART/dialog
+  integration checks, host CI and on-demand Windows packaging artifacts.
+- Pinned runtime/build requirements and current system, app, architecture,
+  protocol, development, validation and roadmap documentation (2026-10-15).
 - **PC Monitor screen** — big clock + CPU / GPU / MEM dashboard with
   color-coded load bars and temperatures.
 - **USB time sync** — wall-clock synchronization over the Type-C serial port
@@ -17,14 +30,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tools/pc_monitor_host.py` — host agent for Windows/Linux (ctypes CPU/MEM,
   NVIDIA NVML GPU, WMI CPU temperature, time sync, auto reconnect, live
   passthrough of device logs).
-- Idle clock behavior — MENU untouched for 120 s falls back to the PC Monitor
-  screen; tapping it returns to the menu.
 - Touch-calibration confirmation dialog — the MENU `CALIBRATE` button now
   requires an explicit `CONFIRM`, preventing accidental recalibration.
 - Large clock font (`Montserrat 28`) enabled via `sdkconfig.defaults`.
 
 ### Changed
 
+- Home stays visible when idle, replacing the old two-minute fallback to the
+  separate clock screen. PC details remains available under SYSTEM.
+- Source-only repository layout: generated EXE/firmware, packaging environments,
+  recovery images, local logs and runtime settings are excluded from Git.
+- README entry points use current repository URLs and existing documentation;
+  old V4–V6.1 upgrade notes remain historical references.
 - `net_utils` — time-source tracking (WiFi / USB), mutex around TZ changes,
   redundant NVS writes skipped.
 - `file_xfer` — RX ring buffer raised to 1 KiB so telemetry keeps flowing
@@ -32,6 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Console UART no longer discards later commands in a received chunk; CODEX
+  appended after STAT and commands split across reads are processed correctly.
+- Initial TIME/TZOFF/NAME transmission after connection and custom host baud.
+- Estimated CNY display includes a small yen glyph without an extra full font.
 - Fixed the U+00B7 middle-dot glyph in the PC Monitor hint line, which the
   bundled Montserrat font does not include (rendered as a box).
 

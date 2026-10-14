@@ -1,0 +1,3 @@
+# Host runtime; all other monitoring dependencies use the Python standard library
+# or an optional provider already installed with the OS/GPU driver.
+pyserial==3.5

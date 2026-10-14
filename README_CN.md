@@ -1,177 +1,103 @@
-<p align="center">
-  <img src="docs/images/logo.svg" alt="ESP32 Touch Toolbox logo" width="128"/>
-</p>
+# ESP32 触摸仪表盘与工具箱
 
-<h1 align="center">ESP32 Touch Toolbox</h1>
-<p align="center">
-  <b>单词实验室 · 电脑监控仪表盘 · SD 检测 · 元器件库存 · 小游戏</b><br/>
-  面向 ESP32 + 2.8" ILI9341 彩色电阻触摸屏的专业化离线固件
-</p>
+[![固件构建](https://github.com/mengqy2022/Esp32-s3-touch/actions/workflows/build.yml/badge.svg)](https://github.com/mengqy2022/Esp32-s3-touch/actions/workflows/build.yml)
+[![主机测试](https://github.com/mengqy2022/Esp32-s3-touch/actions/workflows/host-tests.yml/badge.svg)](https://github.com/mengqy2022/Esp32-s3-touch/actions/workflows/host-tests.yml)
 
-<p align="center">
-  <a href="https://github.com/<owner>/<repo>/actions/workflows/build.yml"><img src="https://github.com/<owner>/<repo>/actions/workflows/build.yml/badge.svg" alt="ESP-IDF build"/></a>
-  <a href="https://www.espressif.com/en/products/socs/esp32"><img src="https://img.shields.io/badge/ESP--IDF-v5.5.4-3B82F6?logo=espressif&logoColor=white" alt="ESP-IDF v5.5.4"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/LVGL-8.4-8E6CE0" alt="LVGL 8.4"/></a>
-  <a href="#"><img src="https://img.shields.io/badge/board-ESP32--WROOM--32E-16A34A" alt="ESP32-WROOM-32E"/></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22C55E" alt="License: MIT"/></a>
-</p>
+[English](README.md) · [文档目录](docs/README.md) · [更新记录](CHANGELOG.md)
 
-<!-- 上传后请把上方 CI 徽章里的 <owner>/<repo> 替换成你的 GitHub 仓库名。 -->
+本项目把电脑监控和本机 Codex 今日 Token／人民币估算费用直接放在
+320×240 触摸主界面上。小游戏、系统工具、元器件库存和单词实验室通过
+GAME、SYSTEM、OTHER 三个分类进入。Windows 配套 EXE 负责采集与发送数据，
+安装后在用户登录时启动，未插设备时等待，插入后自动连接。
 
----
+> 仓库名保留 `Esp32-s3-touch`，但本次实机报告为 **ESP32-D0WD-V3**。
+> 当前工程目标为 **`esp32`**，使用 **ESP-IDF 5.5.4 / LVGL 8.4**。
+> 不要因仓库名称把目标切换为 `esp32s3`。引脚定义见 [硬件说明](docs/HARDWARE.md)。
 
-## 项目简介
+## 当前功能
 
-**ESP32 Touch Toolbox** 是一套面向经典组合
-"ESP32-WROOM-32E + ILI9341 2.8 寸 320×240 电阻触摸屏 + MicroSD"的完整固件，
-把日常工具、学习软件和娱乐整合到一台设备上：
+| 页面／程序 | 功能 |
+| --- | --- |
+| 主界面 | 日期、星期、Wi-Fi 状态、时钟；CPU/GPU/RAM 圆环、温度、内存用量。闲置时继续显示主页。 |
+| CODEX 卡片 | 今日输入＋输出 Token；可选的个人目标进度；`~¥` 人民币估算费用，约每 5 秒更新。 |
+| GAME | SUDOKU 数独、2048、FLAPPY。 |
+| SYSTEM | SD CHECK、SYSTEM INFO、WIFI、CALIBRATE、PC DETAILS。 |
+| OTHER | INVENTORY 库存／BOM、VOCAB LAB 本地词书与学习计划、间隔复习、触屏默写。 |
+| Windows EXE | 当前用户安装、登录自启开关、设备检测、暂停／恢复、修改价格和汇率、查看轮换日志。 |
 
-- **Vocab Lab 单词实验室** —— 离线背单词：本地词书、每日计划、间隔复习、触屏默写。
-- **PC Monitor 电脑监控屏** —— 大字时钟 + USB 时间同步 + PC 的 CPU/GPU/MEM
-  使用率与温度实时仪表盘。
-- **经典工具** —— SD 卡检测、Wi-Fi 管理、系统信息、电子元器件库存出入库、
-  串口文件传输。
+工具的 BACK 返回对应分类，分类的 BACK 返回主页，PC DETAILS 点击返回主页。
+电脑数据需要 PC 配套程序持续运行；离线游戏和本地工具可独立使用。
+温度／GPU 读取依赖电脑硬件与驱动，不支持的数据显示 `--`。
 
-配置完成后完全离线运行：无云、无账号、无订阅。
+## EXE 快速使用
 
-> Vocab Lab 仅参考常见背词软件的交互思路，不包含任何商业图片、课程、
-> 付费词库或会员服务，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+1. 获取维护者发布的 `ESP32TouchDashboard.exe`，或按下文自行构建。
+   Git 源码中不保存 EXE；目前不承诺已经发布公开下载版本。
+2. 把设备接到电脑，确认设备管理器出现串口。测试板使用 CH340，必要时安装对应驱动。
+3. 双击 EXE 并选择安装。无需 Python 或管理员权限，安装在
+   `%LOCALAPPDATA%/ESP32TouchDashboard`，首次安装会启用当前用户登录自启。
+4. 从开始菜单打开 **ESP32 Touch Dashboard**，确认“开机自启：已启用”。
+   此处还可以关闭自启、暂停／恢复、打开价格配置与日志。
+5. 烧录、库存串口操作或使用其他串口工具之前，先暂停监控；完成后恢复。
 
-## 功能亮点
+**自启发生在 Windows 登录后。关闭自启只影响下次登录；暂停则释放当前串口，
+暂停状态会保留到下次登录。** 新电脑上需要安装一次 EXE；本机 Codex 日志不会随设备迁移。
+完整步骤见 [Windows 软件手册](docs/WINDOWS_APP_CN.md)。
 
-| | |
-|---|---|
-| 🖥️ **PC Monitor 屏幕** | 大字 HH:MM:SS 时钟、日期/时区/时间来源行、主机连接状态、CPU/GPU/MEM 进度条（≥70% 变黄、≥90% 变红）与温度。 |
-| ⏱️ **Type-C 时间同步** | 通过串口每 15 秒校准一次时钟（`PC:TIME`），时区偏移自动下发并持久化到 NVS —— 没有 Wi-Fi 也能准。 |
-| 💤 **待机时钟** | 主菜单闲置 2 分钟自动切回时钟仪表盘，点击屏幕任意位置返回。 |
-| 🛡️ **校准确认** | 菜单里的 `CALIBRATE` 现在先弹确认对话框，杜绝误触清空校准数据。 |
-| 📖 **离线优先词书** | 词书保存在 MicroSD 上并按行流式读取，几千词的大词书也不占内存。 |
-| 🔄 **串口优雅共存** | `FILE:` 文件传输与 `PC:` 遥测共用同一控制台串口，由单一读任务按前缀分发。 |
+## Token 与人民币金额
 
-## 硬件
+统计来源为本机 Codex 会话日志，按电脑本地日期汇总输入和输出。
+缓存输入已经包含在输入计数中。金额按模型的普通输入、缓存读取、缓存写入、
+输出单价分别估算，再换算人民币，显示如 `~¥12.34`。
+默认示例单价由使用者提供，汇率 7.20 可修改，详见 [统计与价格说明](docs/CODEX_USAGE_CN.md)。
 
-目标硬件组合：**ESP32-WROOM-32E · 2.8" ILI9341 SPI 屏（320×240）·
-XPT2046 电阻触摸 · MicroSD（SPI）· 共阳 RGB LED**。
+统计不等于官方套餐额度、实际账单或跨电脑总用量。程序不会向设备发送对话文本、
+账号凭据或 API Key。缺少有效日志时显示 NO DATA；未知模型／不完整价格时
+金额显示 `~¥--`。PC 数据超过 5 秒、Codex 数据超过 90 秒未更新会失效。
 
-| 外设 | GPIO |
-|---|---|
-| ILI9341（SCK/MOSI/MISO/CS/DC/BL） | 14 / 13 / 12 / 15 / 2 / 21 |
-| XPT2046（SCK/MOSI/MISO/CS/IRQ） | 25 / 32 / 39 / 33 / 36 |
-| MicroSD（SCK/MISO/MOSI/CS） | 18 / 19 / 23 / 5 |
-| RGB LED（R/G/B，低电平点亮） | 17 / 22 / 16 |
-| BOOT 按键（长按重新校准） | GPIO0 |
+## 开发构建
 
-完整引脚图、接线说明与元件 BOM 集中在一份文件里：
-**[docs/HARDWARE.md](docs/HARDWARE.md)**。
+固件在 ESP-IDF 5.5.4 环境中构建：
 
-## PC Monitor 快速上手
-
-屏幕由设备渲染，PC 只负责喂数据：
-
-```bash
-pip install pyserial
-python tools/pc_monitor_host.py            # 自动识别串口
-python tools/pc_monitor_host.py --port COM8
-```
-
-- Windows：CPU/内存走 `GetSystemTimes`/`GlobalMemoryStatusEx`（ctypes，
-  零依赖），GPU 走 NVIDIA NVML，CPU 温度走 WMI（尽力而为）。
-- Linux：`/proc` 读取 CPU/内存，`nvidia-smi` 读取 GPU。
-- 时间与时区自动下发，设备将时区写入 NVS，断电不丢。
-
-协议细节见 [docs/PROTOCOL.md](docs/PROTOCOL.md)，中文手册见
-[docs/PC_MONITOR_CN.md](docs/PC_MONITOR_CN.md)。
-
-## 构建与烧录
-
-ESP-IDF **v5.5.4**，target `esp32`，LVGL 8.4（Component Manager 自动拉取）。
-
-```bash
+```powershell
 idf.py set-target esp32
 idf.py build
-idf.py -p /dev/ttyUSB0 flash monitor     # Windows 用 COMx
+idf.py -p COM5 flash
 ```
 
-快捷脚本：Linux/macOS 用 `./build_flash.sh <端口>`，Windows 用
-`build_flash.bat <端口>`。`build/`、`sdkconfig`、`managed_components/`
-均不入库，首次构建自动恢复依赖。
+首次克隆时选择目标；已有本机配置则保留。COM5 是示例，请换成实际串口。
+Windows EXE 使用 Python 3.11 x64 构建：
 
-> 从 PC Monitor 合并之前的旧构建升级时，先执行一次 `idf.py fullclean`，
-> 让 `sdkconfig.defaults` 新启用的大字时钟字体 `Montserrat 28` 生效。
-
-## MicroSD 初始化
-
-把 `sdcard_template/` 整个复制到一张 FAT32 格式的 MicroSD 卡根目录：
-
-```text
-/sdcard/
-├── INVENTORY.CSV           库存：PRODUCT_NO,MODEL,QTY（UTF-8）
-├── BOM_IN/  BOM_OUT/       入库/出库 CSV 交换目录
-└── vocabulary/
-    ├── books/              词书 CSV（UTF-8）
-    ├── progress/           每本词书的学习进度
-    └── cache/              下载临时目录
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build_exe.ps1
 ```
 
-设备挂载 SD 卡后进入：**VOCAB LAB → BOOKS → starter** 即可离线学习；
-或连上 Wi-Fi 直接在设备上下载 CET / TOEFL / IELTS 词书。
+产物位于 `dist/ESP32TouchDashboard.exe`。终端版主机工具可直接运行：
 
-## 仓库结构
-
-```text
-.
-├── .github/workflows/build.yml    # ESP-IDF v5.5.4 CI，上传固件产物
-├── main/                          # 固件源码（ESP-IDF 组件）
-│   ├── main.c                     # 启动、任务、待机时钟策略
-│   ├── ui.c / ui.h                # LVGL 屏幕、主题、确认对话框
-│   ├── pc_monitor.c / .h          # PC: 遥测协议与状态
-│   ├── vocabulary.c / .h          # Vocab Lab 引擎 + 词书下载
-│   ├── inventory.c / .h           # 元器件库存/BOM
-│   ├── file_xfer.c / .h           # 控制台串口 FILE: 协议
-│   ├── net_utils.c / .h           # SNTP、定位、USB 时间同步、时区
-│   ├── wifi_mgr.c / .h            # Wi-Fi 扫描连接 + 凭据 NVS
-│   ├── sd_monitor.c / .h          # SD 生命周期管理者
-│   ├── lcd_ili9341.c / .h         # 裸机 LCD 驱动
-│   ├── xpt2046.c / .h             # 触摸驱动 + 三点校准
-│   ├── sudoku.c · game2048.c · flappy.c
-│   ├── lv_port.c / .h             # LVGL 任务、命令队列、触摸时间戳
-│   └── board_pins.h               # GPIO 唯一定义处
-├── tools/
-│   ├── pc_monitor_host.py         # PC Monitor 主机端（Windows/Linux）
-│   ├── inventory_tool.py          # 图形化串口库存管理
-│   ├── vocab_convert.py           # JSON/CSV → 设备词书
-│   ├── material_to_inventory.py   # 立创订单 CSV → INVENTORY.CSV
-│   └── smoke_test.py / test_parse.py
-├── docs/
-│   ├── HARDWARE.md                # 引脚、接线、BOM
-│   ├── PROTOCOL.md                # FILE: + PC: 串口协议
-│   ├── ARCHITECTURE.md            # 任务模型与模块职责
-│   ├── VOCABULARY.md              # 词书格式、计划、SRS、默写
-│   ├── PC_MONITOR_CN.md           # PC Monitor 中文手册
-│   └── images/                    # logo 与截图槽位
-└── sdcard_template/               # SD 卡初始内容
+```powershell
+python -m pip install -r tools/requirements.txt
+python tools/pc_monitor_host.py --port COM5 --codex-prices tools/codex_prices.json
 ```
 
-## 文档索引
+固件、EXE、缓存、依赖环境、Flash 备份、日志和本机设置都不提交 Git。
+后续提供下载版时，把 EXE 放入 GitHub Releases 或 Actions 产物。
+详见 [开发、测试与发布流程](docs/DEVELOPMENT.md)。
+
+## 文档入口
 
 | 文档 | 内容 |
-|---|---|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 任务模型、线程规则、UI 调度、SD 归属 |
-| [docs/HARDWARE.md](docs/HARDWARE.md) | 引脚表、接线注意、元件 BOM |
-| [docs/PROTOCOL.md](docs/PROTOCOL.md) | 控制台串口协议（`FILE:` 与 `PC:`） |
-| [docs/VOCABULARY.md](docs/VOCABULARY.md) | 词书格式、每日计划、SRS、默写 |
-| [README.md](README.md) | English documentation |
-| [CHANGELOG.md](CHANGELOG.md) | 版本历史 |
+| --- | --- |
+| [详细功能说明](docs/HOME_DASHBOARD_CN.md) | 主界面、全部分类、数据更新和失效行为 |
+| [EXE 使用手册](docs/WINDOWS_APP_CN.md) | 安装、自启、暂停、迁移、更新、卸载、排障 |
+| [Codex 统计与计价](docs/CODEX_USAGE_CN.md) | 日志口径、默认单价、公式、配置和限制 |
+| [硬件说明](docs/HARDWARE.md) | 芯片目标、屏幕、引脚表 |
+| [架构说明](docs/ARCHITECTURE.md) | 固件与主机模块、数据流、线程规则 |
+| [串口协议](docs/PROTOCOL.md) | PC 遥测与 FILE 文件传输 |
+| [词书说明](docs/VOCABULARY.md) | SD 目录、CSV、学习计划 |
+| [开发指南](docs/DEVELOPMENT.md) | 构建、测试、源码提交与发布 |
+| [验证记录](docs/VALIDATION.md) | 已测试结果与尚未验证的范围 |
+| [后续开发设想](docs/ROADMAP_CN.md) | EXE 易用性、资源优化、设备与统计能力 |
 
-## 贡献与许可
-
-欢迎贡献，规则见 [CONTRIBUTING.md](CONTRIBUTING.md)（离线优先、内存友好、
-不打包商业素材）。
-
-本项目采用 **MIT 许可证** —— 见 [LICENSE](LICENSE)。第三方组件与词书来源
-的许可说明集中在 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，
-公开发布或商业分发前请务必核对。
-
----
-
-*在 ESP32-WROOM-32E + ILI9341 320×240 + XPT2046 上设计并真机验证。*
+历史 V4～V6.1 升级笔记保留在 `docs/`，不代表当前全部行为。
+项目采用 [MIT 许可](LICENSE)，第三方组件和词书说明见
+[第三方声明](docs/THIRD_PARTY_NOTICES.md)，贡献规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。

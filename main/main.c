@@ -26,10 +26,6 @@ static const char *TAG = "app";
 
 #define AUTO_PERIOD_US 3000000LL
 
-// Idle "clock screen": when the MENU sits untouched this long, fall back to
-// the PC MONITOR dashboard (big clock + host telemetry). Tap it to return.
-#define IDLE_TO_PCMON_MS 120000
-
 static void rgb_init(void)
 {
     gpio_config_t io = {
@@ -214,16 +210,7 @@ void app_main(void)
                 last_auto_us = now;
             }
         }
-        // Idle fall-back to the clock / PC monitor screen (menu only, so
-        // games and tool screens are never yanked away).
-        if (ui_get_screen() == SCREEN_MENU) {
-            uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
-            if (now_ms - lv_port_last_input_ms() >= IDLE_TO_PCMON_MS) {
-                ESP_LOGI(TAG, "idle %ds: showing clock screen",
-                         (int)(IDLE_TO_PCMON_MS / 1000));
-                ui_set_screen(SCREEN_PCMON);
-            }
-        }
+        // The home dashboard already shows the clock and live telemetry.
         ui_tick();
         vTaskDelay(pdMS_TO_TICKS(50));
     }

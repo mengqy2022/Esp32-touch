@@ -1,0 +1,34 @@
+name: Windows EXE package
+
+# Build on demand. Downloadable artifacts are separate from tracked source.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: x64
+      - name: Package standalone EXE
+        shell: pwsh
+        run: ./build_exe.ps1
+      - name: Write SHA-256 checksum
+        shell: pwsh
+        run: |
+          $dashboardHash = (Get-FileHash -LiteralPath dist/ESP32TouchDashboard.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$dashboardHash  ESP32TouchDashboard.exe" | Set-Content -LiteralPath dist/SHA256SUMS.txt -Encoding ascii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ESP32TouchDashboard-windows-x64
+          path: |
+            dist/ESP32TouchDashboard.exe
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14

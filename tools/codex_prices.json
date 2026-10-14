@@ -1,0 +1,15 @@
+{
+  "currency": "USD",
+  "usd_to_cny": 7.20,
+  "source": "User supplied prices; fixed configurable exchange rate",
+  "models": {
+    "gpt-6.1-sol": {
+      "short": {"input_per_million": 2, "cached_input_per_million": 0.1, "cache_write_input_per_million": 2.5, "output_per_million": 10},
+      "long": {"input_per_million": 4, "cached_input_per_million": 0.2, "cache_write_input_per_million": 5, "output_per_million": 15}
+    },
+    "gpt-6-astra": {
+      "short": {"input_per_million": 10, "cached_input_per_million": 1, "cache_write_input_per_million": 12.5, "output_per_million": 50},
+      "long": {"input_per_million": 20, "cached_input_per_million": 2, "cache_write_input_per_million": 25, "output_per_million": 75}
+    }
+  }
+}

@@ -201,35 +201,40 @@ static void xfer_task(void *arg)
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
-        char *line = lb_push(&lb, buf, len);
-        if (!line) continue;
+        // A UART read can contain several protocol lines. Process every byte
+        // so completing one line never discards the rest of the received chunk.
+        // FILE:PUT senders still wait for FILE:READY before binary payloads.
+        for (int i = 0; i < len; ++i) {
+            char *line = lb_push(&lb, buf + i, 1);
+            if (!line) continue;
 
-        // Parse "FILE:CMD|p1|p2"
-        if (strncmp(line, "FILE:", 5) == 0) {
-            char *cmd = line + 5;
-            char *p1 = strchr(cmd, '|');
-            if (p1) { *p1 = '\0'; ++p1; }
-            char *p2 = p1 ? strchr(p1, '|') : NULL;
-            if (p2) { *p2 = '\0'; ++p2; }
+            // Parse "FILE:CMD|p1|p2"
+            if (strncmp(line, "FILE:", 5) == 0) {
+                char *cmd = line + 5;
+                char *p1 = strchr(cmd, '|');
+                if (p1) { *p1 = '\0'; ++p1; }
+                char *p2 = p1 ? strchr(p1, '|') : NULL;
+                if (p2) { *p2 = '\0'; ++p2; }
 
-            if (strcmp(cmd, "PING") == 0) {
-                send_line("FILE:PONG");
-            } else if (strcmp(cmd, "LIST") == 0) {
-                cmd_list(p1 ? p1 : "");
-            } else if (strcmp(cmd, "PUT") == 0 && p1 && p2) {
-                cmd_put(p1, strtol(p2, NULL, 10));
-            } else if (strcmp(cmd, "GET") == 0 && p1) {
-                cmd_get(p1);
-            } else if (strcmp(cmd, "DEL") == 0 && p1) {
-                cmd_del(p1);
-            } else {
-                send_line("FILE:ERR|unknown command");
+                if (strcmp(cmd, "PING") == 0) {
+                    send_line("FILE:PONG");
+                } else if (strcmp(cmd, "LIST") == 0) {
+                    cmd_list(p1 ? p1 : "");
+                } else if (strcmp(cmd, "PUT") == 0 && p1 && p2) {
+                    cmd_put(p1, strtol(p2, NULL, 10));
+                } else if (strcmp(cmd, "GET") == 0 && p1) {
+                    cmd_get(p1);
+                } else if (strcmp(cmd, "DEL") == 0 && p1) {
+                    cmd_del(p1);
+                } else {
+                    send_line("FILE:ERR|unknown command");
+                }
+            } else if (strncmp(line, "PC:", 3) == 0) {
+                // PC Monitor telemetry (time sync + CPU/GPU/MEM feed).
+                pc_monitor_handle_line(line + 3);
             }
-        } else if (strncmp(line, "PC:", 3) == 0) {
-            // PC Monitor telemetry (time sync + CPU/GPU/MEM feed).
-            pc_monitor_handle_line(line + 3);
+            free(line);
         }
-        free(line);
     }
 }
 

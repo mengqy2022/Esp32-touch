@@ -74,9 +74,18 @@ static lv_obj_t *s_wifi_kb;
 static int s_wifi_sel = -1;
 static wifi_state_t s_last_wifi_state = (wifi_state_t)-1;
 
-// MENU bottom info labels
+// Home dashboard widgets (320x240 landscape, no bitmap assets).
 static lv_obj_t *s_menu_time;
 static lv_obj_t *s_menu_loc;
+static lv_obj_t *s_home_date;
+static lv_obj_t *s_home_link;
+static lv_obj_t *s_home_arc[3];
+static lv_obj_t *s_home_value[3];
+static lv_obj_t *s_home_detail[3];
+static lv_obj_t *s_codex_value;
+static lv_obj_t *s_codex_bar;
+static lv_obj_t *s_codex_state;
+static ui_screen_t s_menu_parent = SCREEN_MENU;
 
 // Touch-calibration confirmation overlay (LVGL top layer)
 static lv_obj_t *s_cal_layer;
@@ -201,6 +210,7 @@ static lv_timer_t *s_ui_timer;
 
 // ---------------- forward decls ----------------
 static void build_menu_screen(void);
+static void build_category_screen(void);
 static void build_sd_screen(void);
 static void build_sysinfo_screen(void);
 static void build_wifi_screen(void);
@@ -486,6 +496,9 @@ static void on_menu_btn(lv_event_t *e)
         case 9:
             lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_PCMON);
             break;
+        case 10: lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_GAME_MENU); break;
+        case 11: lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_SYSTEM_MENU); break;
+        case 12: lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_OTHER_MENU); break;
         default: break;
     }
 }
@@ -504,7 +517,8 @@ static void on_back(lv_event_t *e)
         lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_VOCAB);
         return;
     }
-    lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_MENU);
+    bool category = s_screen == SCREEN_GAME_MENU || s_screen == SCREEN_SYSTEM_MENU || s_screen == SCREEN_OTHER_MENU;
+    lv_port_post_cmd(UI_CMD_SCREEN, category ? SCREEN_MENU : s_menu_parent);
 }
 
 static void on_sd_scan(lv_event_t *e)
@@ -557,85 +571,154 @@ static void on_ap_click(lv_event_t *e)
     lv_port_post_cmd(UI_CMD_DRAW, 0);
 }
 
-// ---------------- MENU screen ----------------
-// The module buttons live in a vertically scrollable container so the layout
-// stays clean even with many modules (up to 10+). The status card is pinned
-// at the bottom and never overlaps the buttons.
+// ---------------- Home dashboard + categorized tools ----------------
+static lv_obj_t *home_panel(lv_obj_t *parent, int x, int y, int w, int h, lv_color_t color)
+{
+    lv_obj_t *card = lv_obj_create(parent);
+    lv_obj_set_pos(card, x, y);
+    lv_obj_set_size(card, w, h);
+    lv_obj_set_style_pad_all(card, 0, 0);
+    lv_obj_set_style_radius(card, 8, 0);
+    lv_obj_set_style_bg_color(card, lv_color_hex(0x07161E), 0);
+    lv_obj_set_style_border_color(card, color, 0);
+    lv_obj_set_style_border_width(card, 1, 0);
+    lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    return card;
+}
+
+static lv_obj_t *home_label(lv_obj_t *parent, const char *text, int x, int y, int w, lv_color_t color)
+{
+    lv_obj_t *label = make_label(parent, text, x, y, color);
+    lv_obj_set_width(label, w);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+    return label;
+}
+
+// Montserrat's bundled subset omits U+00A5. Supply that one glyph and reuse
+// Montserrat for digits so the CNY amount renders without an extra font file.
+static bool money_glyph_dsc(const lv_font_t *font, lv_font_glyph_dsc_t *out, uint32_t letter, uint32_t next)
+{
+    (void)font;
+    if (letter != 0xA5) return lv_font_get_glyph_dsc(&lv_font_montserrat_14, out, letter, next);
+    out->adv_w = 9;
+    out->box_w = 8;
+    out->box_h = 12;
+    out->ofs_x = 0;
+    out->ofs_y = 0;
+    out->bpp = 1;
+    return true;
+}
+
+static const uint8_t *money_glyph_bitmap(const lv_font_t *font, uint32_t letter)
+{
+    (void)font;
+    static const uint8_t yen[] = {0xC6, 0xC6, 0x6C, 0x6C, 0x38, 0x38, 0xFE, 0x38, 0xFE, 0x38, 0x38, 0x38};
+    return letter == 0xA5 ? yen : lv_font_get_glyph_bitmap(&lv_font_montserrat_14, letter);
+}
+
+static const lv_font_t s_money_font = {
+    .get_glyph_dsc = money_glyph_dsc, .get_glyph_bitmap = money_glyph_bitmap,
+    .line_height = 16, .base_line = 3,
+};
+
 static void build_menu_screen(void)
 {
     lv_obj_t *scr = lv_scr_act();
     lv_obj_clean(scr);
     style_screen(scr);
+    lv_color_t cyan = lv_color_hex(0x24D4EA);
+    s_home_date = home_label(scr, "DATE --", 10, 5, 168, CLR_TEXT_DIM);
+    s_menu_loc = home_label(scr, "WIFI --", 178, 5, 78, cyan);
+    s_menu_time = home_label(scr, "--:--", 258, 3, 58, CLR_TEXT);
+    lv_obj_set_style_text_font(s_menu_time, &lv_font_montserrat_16, 0);
 
-    make_title(scr, "ESP32 Monitor");
-
-    // Scrollable module list container.
-    lv_obj_t *sc = lv_obj_create(scr);
-    lv_obj_set_size(sc, 300, 130);
-    lv_obj_set_pos(sc, 10, 38);
-    lv_obj_set_style_bg_color(sc, CLR_BG, 0);
-    lv_obj_set_style_border_width(sc, 0, 0);
-    lv_obj_set_style_radius(sc, 0, 0);
-    lv_obj_set_style_pad_all(sc, 0, 0);
-    lv_obj_set_scroll_dir(sc, LV_DIR_VER);
-    lv_obj_set_scrollbar_mode(sc, LV_SCROLLBAR_MODE_AUTO);
-
-    struct { const char *label; int16_t id; lv_color_t color; } cards[] = {
-        { "SD CHECK",   0, lv_color_hex(0x2E86DE) },
-        { "SYSTEM",     1, lv_color_hex(0x8E6CE0) },
-        { "WIFI",       2, lv_color_hex(0x00C9A7) },
-        { "PC MONITOR", 9, lv_color_hex(0x0EA5E9) },
-        { "CALIBRATE",  3, lv_color_hex(0xF5A623) },
-        { "SUDOKU",     4, lv_color_hex(0xE0556D) },
-        { "2048",       7, lv_color_hex(0xF97316) },
-        { "FLAPPY",     8, lv_color_hex(0x38BDF8) },
-        { "INVENTORY",  5, lv_color_hex(0x4CAF50) },
-        { "VOCAB LAB",  6, lv_color_hex(0x7C3AED) },
-        // Extensible: add more modules below; the container scrolls.
-        // { "BLUETOOTH", 6, ... },
-    };
-    const int n = (int)(sizeof(cards) / sizeof(cards[0]));
-
-    // 2 columns; each button 140x36 with 8px row gap. With 10 modules this is
-    // 5 rows * 44px = 220px > 130px container height -> scrolls, no overlap.
-    const lv_coord_t btn_w = 140, btn_h = 42, gap = 8;
-    for (int i = 0; i < n; ++i) {
-        lv_obj_t *btn = make_btn(sc, cards[i].label, on_menu_btn, cards[i].id);
-        lv_obj_set_size(btn, btn_w, btn_h);
-        lv_obj_set_style_bg_color(btn, cards[i].color, 0);
-        lv_obj_set_style_bg_color(btn, CLR_PRIMARY_D, LV_STATE_PRESSED);
-        lv_coord_t x = (i % 2) ? (btn_w + 6) : 0;
-        lv_coord_t y = (i / 2) * (btn_h + gap);
-        lv_obj_set_pos(btn, x, y);
+    lv_obj_t *pc = home_panel(scr, 8, 27, 304, 112, cyan);
+    home_label(pc, LV_SYMBOL_CHARGE " PC MONITOR", 8, 4, 168, cyan);
+    s_home_link = home_label(pc, "WAITING", 205, 4, 89, CLR_TEXT_DIM);
+    lv_obj_set_style_text_align(s_home_link, LV_TEXT_ALIGN_RIGHT, 0);
+    const char *names[] = {"CPU", "GPU", "RAM"};
+    lv_color_t colors[] = {lv_color_hex(0x38BDF8), CLR_OK, lv_color_hex(0xA855F7)};
+    for (int i = 0; i < 3; ++i) {
+        int x = 14 + i * 100;
+        lv_obj_t *arc = lv_arc_create(pc);
+        s_home_arc[i] = arc;
+        lv_obj_set_pos(arc, x, 23);
+        lv_obj_set_size(arc, 72, 72);
+        lv_arc_set_bg_angles(arc, 135, 405);
+        lv_arc_set_rotation(arc, 0);
+        lv_arc_set_range(arc, 0, 100);
+        lv_arc_set_value(arc, 0);
+        lv_obj_set_style_arc_width(arc, 5, LV_PART_MAIN);
+        lv_obj_set_style_arc_width(arc, 5, LV_PART_INDICATOR);
+        lv_obj_set_style_arc_color(arc, lv_color_hex(0x173342), LV_PART_MAIN);
+        lv_obj_set_style_arc_color(arc, colors[i], LV_PART_INDICATOR);
+        lv_obj_remove_style(arc, NULL, LV_PART_KNOB);
+        lv_obj_clear_flag(arc, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+        s_home_value[i] = home_label(pc, "--%", x, 41, 72, CLR_TEXT);
+        lv_obj_set_style_text_font(s_home_value[i], &lv_font_montserrat_16, 0);
+        lv_obj_set_style_text_align(s_home_value[i], LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_t *name = home_label(pc, names[i], x, 61, 72, colors[i]);
+        lv_obj_set_style_text_align(name, LV_TEXT_ALIGN_CENTER, 0);
+        s_home_detail[i] = home_label(pc, "--", i * 100 + 2, 91, 98, CLR_TEXT_DIM);
+        lv_obj_set_style_text_align(s_home_detail[i], LV_TEXT_ALIGN_CENTER, 0);
     }
 
-    // Bottom status card (pinned, fixed height, separated from the menu list).
-    lv_obj_t *card = lv_obj_create(scr);
-    lv_obj_set_size(card, 300, 64);
-    lv_obj_set_pos(card, 10, 172);
-    lv_obj_set_style_bg_color(card, CLR_PANEL, 0);
-    lv_obj_set_style_border_width(card, 0, 0);
-    lv_obj_set_style_radius(card, 8, 0);
+    lv_obj_t *codex = home_panel(scr, 8, 144, 304, 45, cyan);
+    home_label(codex, LV_SYMBOL_EDIT " CODEX", 8, 4, 90, cyan);
+    s_codex_state = home_label(codex, "~\xC2\xA5--", 176, 4, 118, CLR_TEXT_DIM);
+    lv_obj_set_style_text_font(s_codex_state, &s_money_font, 0);
+    lv_obj_set_style_text_align(s_codex_state, LV_TEXT_ALIGN_RIGHT, 0);
+    s_codex_value = home_label(codex, "TODAY -- tokens", 8, 21, 206, CLR_TEXT);
+    s_codex_bar = lv_bar_create(codex);
+    lv_obj_set_pos(s_codex_bar, 220, 26);
+    lv_obj_set_size(s_codex_bar, 74, 7);
+    lv_bar_set_range(s_codex_bar, 0, 100);
+    lv_bar_set_value(s_codex_bar, 0, LV_ANIM_OFF);
+    lv_obj_set_style_bg_color(s_codex_bar, lv_color_hex(0x173342), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_codex_bar, cyan, LV_PART_INDICATOR);
 
-    s_menu_time = lv_label_create(card);
-    lv_obj_set_style_text_color(s_menu_time, CLR_TEXT, 0);
-    lv_obj_set_pos(s_menu_time, 12, 4);
-
-    s_menu_loc = lv_label_create(card);
-    lv_obj_set_style_text_color(s_menu_loc, CLR_ACCENT, 0);
-    lv_obj_set_pos(s_menu_loc, 12, 22);
-
-    char line[48];
-    const sdmon_status_t *s = sd_monitor_get_status();
-    snprintf(line, sizeof(line), "SD: %s   AUTO: %s", sd_state_text(s->state),
-             s_auto ? "ON" : "OFF");
-    lv_obj_t *st = lv_label_create(card);
-    lv_label_set_text(st, line);
-    lv_obj_set_style_text_color(st, state_color(s->state), 0);
-    lv_obj_set_pos(st, 12, 40);
-
-    // Initial fill
+    const char *categories[] = {LV_SYMBOL_PLAY "  GAME", LV_SYMBOL_SETTINGS "  SYSTEM", LV_SYMBOL_LIST "  OTHER"};
+    lv_color_t colors_btn[] = {CLR_OK, cyan, lv_color_hex(0xFB923C)};
+    for (int i = 0; i < 3; ++i) {
+        lv_obj_t *btn = make_btn(scr, categories[i], on_menu_btn, 10 + i);
+        lv_obj_set_pos(btn, 8 + i * 103, 195);
+        lv_obj_set_size(btn, 98, 37);
+        lv_obj_set_style_radius(btn, 7, 0);
+        lv_obj_set_style_bg_color(btn, CLR_PANEL, 0);
+        lv_obj_set_style_border_color(btn, colors_btn[i], 0);
+        lv_obj_set_style_text_color(lv_obj_get_child(btn, 0), colors_btn[i], 0);
+    }
     refresh_menu_bottom();
+    ESP_LOGI(TAG, "Home dashboard ready: PC / CODEX / GAME / SYSTEM / OTHER");
+}
+
+static void build_category_screen(void)
+{
+    lv_obj_t *scr = lv_scr_act();
+    lv_obj_clean(scr);
+    style_screen(scr);
+    const bool game = s_screen == SCREEN_GAME_MENU;
+    const bool system = s_screen == SCREEN_SYSTEM_MENU;
+    make_title(scr, game ? "GAME" : system ? "SYSTEM" : "OTHER");
+    make_back_btn(scr);
+    static const struct { const char *label; int16_t id; } games[] = {
+        {"SUDOKU", 4}, {"2048", 7}, {"FLAPPY", 8}
+    }, systems[] = {
+        {"SD CHECK", 0}, {"SYSTEM INFO", 1}, {"WIFI", 2}, {"CALIBRATE", 3}, {"PC DETAILS", 9}
+    }, others[] = {
+        {"INVENTORY", 5}, {"VOCAB LAB", 6}
+    };
+    int n = game ? 3 : system ? 5 : 2;
+    lv_color_t accent = game ? CLR_OK : system ? lv_color_hex(0x24D4EA) : lv_color_hex(0xFB923C);
+    for (int i = 0; i < n; ++i) {
+        const char *label = game ? games[i].label : system ? systems[i].label : others[i].label;
+        int id = game ? games[i].id : system ? systems[i].id : others[i].id;
+        lv_obj_t *btn = make_btn(scr, label, on_menu_btn, id);
+        lv_obj_set_pos(btn, 10 + (i % 2) * 154, 48 + (i / 2) * 58);
+        lv_obj_set_size(btn, 146, 48);
+        lv_obj_set_style_bg_color(btn, CLR_PANEL, 0);
+        lv_obj_set_style_border_color(btn, accent, 0);
+    }
 }
 
 // ---------------- SD screen ----------------
@@ -773,40 +856,57 @@ static void refresh_sd_labels(void)
 // ---------------- MENU bottom refresh ----------------
 static void refresh_menu_bottom(void)
 {
-    if (s_screen != SCREEN_MENU) return;
-    char line[64];
-    char timebuf[32];
-
-    if (net_time_str(timebuf, sizeof(timebuf))) {
-        snprintf(line, sizeof(line), "%s", timebuf);
+    if (s_screen != SCREEN_MENU || !s_home_date) return;
+    char buf[80];
+    time_t now = time(NULL);
+    struct tm tmv;
+    localtime_r(&now, &tmv);
+    int today = 0;
+    if (net_time_synced() && tmv.tm_year >= 120) {
+        static const char *days[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
+        snprintf(buf, sizeof(buf), "%04d-%02d-%02d %s", tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday, days[tmv.tm_wday]);
+        label_set_text_if_changed(s_home_date, buf);
+        snprintf(buf, sizeof(buf), "%02d:%02d", tmv.tm_hour, tmv.tm_min);
+        label_set_text_if_changed(s_menu_time, buf);
+        today = (tmv.tm_year + 1900) * 10000 + (tmv.tm_mon + 1) * 100 + tmv.tm_mday;
     } else {
-        snprintf(line, sizeof(line), "TIME: syncing...");
+        label_set_text_if_changed(s_home_date, "DATE --");
+        label_set_text_if_changed(s_menu_time, "--:--");
     }
-    label_set_text_if_changed(s_menu_time, line);
-
-    const net_loc_t *loc = net_loc_get();
-    net_loc_state_t ls = net_loc_get_state();
-    if (loc && loc->ok) {
-        snprintf(line, sizeof(line), "LOC: %.20s, %.20s", loc->city, loc->country);
-        lv_obj_set_style_text_color(s_menu_loc, CLR_ACCENT, 0);
-    } else if (ls == NET_LOC_QUERYING) {
-        snprintf(line, sizeof(line), "LOC: locating...");
-        lv_obj_set_style_text_color(s_menu_loc, CLR_TEXT_DIM, 0);
-    } else if (ls == NET_LOC_FAILED) {
-        // Fall back to showing the local IP address (from the router's DHCP).
-        const char *ip = wifi_mgr_get_ip();
-        if (ip && ip[0]) {
-            snprintf(line, sizeof(line), "IP: %s", ip);
-            lv_obj_set_style_text_color(s_menu_loc, CLR_TEXT, 0);
-        } else {
-            snprintf(line, sizeof(line), "LOC: unavailable");
-            lv_obj_set_style_text_color(s_menu_loc, CLR_ERR, 0);
-        }
-    } else {
-        snprintf(line, sizeof(line), "LOC: --");
-        lv_obj_set_style_text_color(s_menu_loc, CLR_TEXT_DIM, 0);
+    bool wifi = wifi_mgr_get_state() == WIFI_STATE_CONNECTED;
+    label_set_text_if_changed(s_menu_loc, wifi ? LV_SYMBOL_WIFI " ON" : LV_SYMBOL_WIFI " OFF");
+    pc_monitor_status_t st;
+    pc_monitor_get(&st);
+    label_set_text_if_changed(s_home_link, st.link ? "PC ONLINE" : "PC OFFLINE");
+    lv_obj_set_style_text_color(s_home_link, st.link ? CLR_OK : CLR_TEXT_DIM, 0);
+    int loads[] = {st.cpu_load, st.gpu_load, st.mem_load};
+    for (int i = 0; i < 3; ++i) {
+        int v = st.link ? loads[i] : -1;
+        lv_arc_set_value(s_home_arc[i], v < 0 ? 0 : v);
+        if (v < 0) snprintf(buf, sizeof(buf), "--%%");
+        else snprintf(buf, sizeof(buf), "%d%%", v);
+        label_set_text_if_changed(s_home_value[i], buf);
+        int temp = i == 0 ? st.cpu_temp : st.gpu_temp;
+        if (i < 2 && st.link && temp >= 0) snprintf(buf, sizeof(buf), "%d\xC2\xB0" "C", temp);
+        else if (i == 2 && st.link && st.mem_used_mb >= 0 && st.mem_total_mb > 0)
+            snprintf(buf, sizeof(buf), "%.1f/%.1fG", st.mem_used_mb / 1024.0, st.mem_total_mb / 1024.0);
+        else snprintf(buf, sizeof(buf), "--");
+        label_set_text_if_changed(s_home_detail[i], buf);
     }
-    label_set_text_if_changed(s_menu_loc, line);
+    bool valid = st.codex_link && st.codex_tokens >= 0 && today == st.codex_day;
+    int percent = 0;
+    if (valid) {
+        if (st.codex_goal > 0) {
+            snprintf(buf, sizeof(buf), "TODAY %.1fk / %.1fk", st.codex_tokens / 1000.0, st.codex_goal / 1000.0);
+            percent = st.codex_tokens >= st.codex_goal ? 100 : (int)((double)st.codex_tokens / st.codex_goal * 100.0);
+        } else snprintf(buf, sizeof(buf), "TODAY %.1fk tokens", st.codex_tokens / 1000.0);
+    } else snprintf(buf, sizeof(buf), "TODAY -- tokens");
+    label_set_text_if_changed(s_codex_value, buf);
+    if (valid && st.codex_cost_fen >= 0)
+        snprintf(buf, sizeof(buf), "~\xC2\xA5%.2f", st.codex_cost_fen / 100.0);
+    else snprintf(buf, sizeof(buf), "~\xC2\xA5--");
+    label_set_text_if_changed(s_codex_state, buf);
+    lv_bar_set_value(s_codex_bar, percent, LV_ANIM_OFF);
 }
 
 // ---------------- SYSINFO screen ----------------
@@ -3583,6 +3683,9 @@ static void do_draw_all(void)
 {
     switch (s_screen) {
         case SCREEN_MENU:    build_menu_screen(); break;
+        case SCREEN_GAME_MENU:
+        case SCREEN_SYSTEM_MENU:
+        case SCREEN_OTHER_MENU: build_category_screen(); break;
         case SCREEN_SD:      build_sd_screen(); break;
         case SCREEN_SYSINFO: build_sysinfo_screen(); break;
         case SCREEN_WIFI:    build_wifi_screen(); break;
@@ -3627,6 +3730,8 @@ static void do_set_screen(ui_screen_t scr)
         s_cal_layer = NULL;
     }
     if (scr != SCREEN_VOCAB_BOOKS) s_vocab_books_notice[0] = '\0';
+    if (scr == SCREEN_MENU) s_menu_parent = SCREEN_MENU;
+    else if (scr == SCREEN_GAME_MENU || scr == SCREEN_SYSTEM_MENU || scr == SCREEN_OTHER_MENU) s_menu_parent = scr;
     s_screen = scr;
     s_wifi_sel = -1;
     s_last_wifi_state = (wifi_state_t)-1;
@@ -3666,6 +3771,18 @@ static void do_set_screen(ui_screen_t scr)
     s_plan_edit_target = 0;
     s_plan_notice[0] = '\0';
     s_vocab_reset_armed = false;
+    s_home_date = NULL;
+    s_home_link = NULL;
+    s_menu_time = NULL;
+    s_menu_loc = NULL;
+    s_codex_value = NULL;
+    s_codex_state = NULL;
+    s_codex_bar = NULL;
+    for (int i = 0; i < 3; ++i) {
+        s_home_arc[i] = NULL;
+        s_home_value[i] = NULL;
+        s_home_detail[i] = NULL;
+    }
     s_pcmon_clock = NULL;
     s_pcmon_date = NULL;
     s_pcmon_link = NULL;
