@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   integration checks, host CI and on-demand Windows packaging artifacts.
 - Pinned runtime/build requirements and current system, app, architecture,
   protocol, development, validation and roadmap documentation (2026-10-15).
+- Published Windows companion EXE in `dist/` with a SHA-256 checksum and direct
+  download links; other generated and private files remain excluded.
 - **PC Monitor screen** — big clock + CPU / GPU / MEM dashboard with
   color-coded load bars and temperatures.
 - **USB time sync** — wall-clock synchronization over the Type-C serial port
@@ -38,8 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Home stays visible when idle, replacing the old two-minute fallback to the
   separate clock screen. PC details remains available under SYSTEM.
-- Source-only repository layout: generated EXE/firmware, packaging environments,
-  recovery images, local logs and runtime settings are excluded from Git.
+- Repository tracks source and the explicitly published companion EXE/checksum;
+  other generated EXE/firmware, packaging environments, recovery images, local
+  logs and runtime settings are excluded from Git.
 - README entry points use current repository URLs and existing documentation;
   old V4–V6.1 upgrade notes remain historical references.
 - `net_utils` — time-source tracking (WiFi / USB), mutex around TZ changes,

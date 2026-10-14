@@ -4,13 +4,17 @@ managed_components/
 recovery/
 .dashboard/
 .packaging/
-dist/
+/dist/*
 *.spec
 # Firmware/desktop release products belong in local output or release artifacts.
 *.exe
 *.elf
 *.map
 *.bin
+# Published companion package; keep all other generated output ignored.
+!/dist/ESP32TouchDashboard.exe
+!/dist/SHA256SUMS.txt
+!/dist/README.md
 sdkconfig
 sdkconfig.old
 sdkconfig.*.old

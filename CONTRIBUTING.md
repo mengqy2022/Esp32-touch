@@ -33,9 +33,11 @@ idf.py -p <PORT> flash monitor
 
 CI builds the `esp32` target with ESP-IDF `v5.5.4` on every push
 (`.github/workflows/build.yml`). Run the same version locally to reproduce CI.
-Host tests, EXE packaging, manual integration checks and source-only publishing
-are described in [the developer guide](docs/DEVELOPMENT.md). Never commit generated
-firmware/EXEs, installed runtime data, private flash images or personal usage logs.
+Host tests, EXE packaging, manual integration checks and publishing are described
+in [the developer guide](docs/DEVELOPMENT.md). The published companion package is
+limited to `dist/ESP32TouchDashboard.exe` and its SHA-256 checksum. Keep other
+generated firmware/EXEs, installed runtime data, private flash images and personal
+usage logs out of Git.
 
 ## Adding a new module
 

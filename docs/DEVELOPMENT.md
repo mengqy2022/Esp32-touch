@@ -1,6 +1,7 @@
 # Development, testing and publishing
 
-This repository tracks source, generic templates and documentation. Firmware,
+This repository tracks source, generic templates, documentation and an explicitly
+published Windows companion EXE/checksum in `dist/`. Other generated firmware,
 EXEs and personal machine data stay outside Git. Keep the existing `main/`,
 `tools/` and `docs/` layout to preserve ESP-IDF and script paths.
 
@@ -111,14 +112,19 @@ unrestricted unit-test discovery.
 Avoid running the live tests as part of a source/doc-only cleanup. They occupy the
 serial port, can reset the device and generate machine-specific reports.
 
-## Source-only Git update
+## Source and published package updates
 
 Inspect `git status` and review the diff in GitHub Desktop before committing.
 Include modified `main/`, new host modules/tests, generic price template,
 requirements, scripts, docs and workflow definitions.
 
-Do not commit `build/`, `dist/`, `.packaging/`, `managed_components/`, `recovery/`,
-EXE/BIN/ELF/MAP files, local SDK configuration, `.log` files, installed LocalAppData
+The only published build outputs allowed in Git are
+`dist/ESP32TouchDashboard.exe` and `dist/SHA256SUMS.txt`; `dist/README.md` explains
+the download. To update the package, build and verify the EXE, regenerate its
+SHA-256 checksum and commit both together.
+
+Do not commit `build/`, other `dist/` output, `.packaging/`, `managed_components/`, `recovery/`,
+other EXE/BIN/ELF/MAP files, local SDK configuration, `.log` files, installed LocalAppData
 contents, Codex logs, credentials or personal CSVs. `.gitignore` covers current
 generated paths; ignore rules do not remove files already tracked by Git.
 
@@ -128,7 +134,7 @@ Example review commands:
 git status --short
 git diff --stat
 git diff --check
-git check-ignore dist/ESP32TouchDashboard.exe build/app.bin recovery/device.bin
+git check-ignore build/app.bin recovery/device.bin dist/temporary.exe
 ```
 
 Suggested commit title: `feat: integrate home dashboard and Windows companion`.

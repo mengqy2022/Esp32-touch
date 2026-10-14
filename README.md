@@ -38,8 +38,9 @@ device; no prompts or credentials are transmitted.
 
 ## Windows quick start
 
-1. Obtain `ESP32TouchDashboard.exe` from a maintainer's published package or build
-   it using the instructions below. This source repository does not contain EXEs.
+1. [Download ESP32TouchDashboard.exe](https://github.com/mengqy2022/Esp32-s3-touch/raw/refs/heads/main/dist/ESP32TouchDashboard.exe)
+   or build it using the instructions below. The published Windows x64 EXE is
+   also available in [dist/](dist/README.md), with a SHA-256 checksum.
 2. Connect the device. Install its USB serial driver if Windows does not expose a
    COM port; the tested board uses CH340.
 3. Double-click the EXE and accept installation. It installs to
@@ -96,9 +97,10 @@ start_dashboard.ps1    Install if needed, set daily goal and resume
 stop_dashboard.ps1     Pause monitoring and release the serial port
 ```
 
-Only source, generic configuration and documentation belong in Git. Generated
-firmware, EXEs, build environments, recovery images and local runtime data are
-excluded. The manual Windows workflow produces a downloadable Actions artifact;
+Git contains source, generic configuration, documentation and the explicitly
+published Windows companion EXE with its checksum. Other generated firmware/EXEs,
+build environments, recovery images and local runtime data are excluded.
+The manual Windows workflow produces a downloadable Actions artifact;
 it does not automatically publish a GitHub Release.
 
 ## Documentation and contribution

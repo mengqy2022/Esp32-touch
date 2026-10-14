@@ -31,8 +31,8 @@ GAME、SYSTEM、OTHER 三个分类进入。Windows 配套 EXE 负责采集与发
 
 ## EXE 快速使用
 
-1. 获取维护者发布的 `ESP32TouchDashboard.exe`，或按下文自行构建。
-   Git 源码中不保存 EXE；目前不承诺已经发布公开下载版本。
+1. [下载 ESP32TouchDashboard.exe](https://github.com/mengqy2022/Esp32-s3-touch/raw/refs/heads/main/dist/ESP32TouchDashboard.exe)，
+   或按下文自行构建。仓库 [dist 下载说明](dist/README.md)包含 Windows x64 程序与 SHA-256 校验文件。
 2. 把设备接到电脑，确认设备管理器出现串口。测试板使用 CH340，必要时安装对应驱动。
 3. 双击 EXE 并选择安装。无需 Python 或管理员权限，安装在
    `%LOCALAPPDATA%/ESP32TouchDashboard`，首次安装会启用当前用户登录自启。
@@ -79,8 +79,9 @@ python -m pip install -r tools/requirements.txt
 python tools/pc_monitor_host.py --port COM5 --codex-prices tools/codex_prices.json
 ```
 
-固件、EXE、缓存、依赖环境、Flash 备份、日志和本机设置都不提交 Git。
-后续提供下载版时，把 EXE 放入 GitHub Releases 或 Actions 产物。
+仓库明确保留 `dist/ESP32TouchDashboard.exe` 与校验文件作为下载包。
+其他固件／EXE、缓存、依赖环境、Flash 备份、日志和本机设置不提交 Git。
+后续版本也可以放入 GitHub Releases，便于保留版本与下载记录。
 详见 [开发、测试与发布流程](docs/DEVELOPMENT.md)。
 
 ## 文档入口

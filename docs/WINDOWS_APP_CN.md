@@ -15,9 +15,10 @@ CPU/GPU/RAM、本机 Codex 今日 Token 与人民币估算费用，并通过串�
    启用当前用户登录自启并启动后台监控。
 5. 从开始菜单打开 **ESP32 Touch Dashboard**，查看自启状态和控制按钮。
 
-仓库仅保存源码；维护者可在 [开发流程](DEVELOPMENT.md)中构建 EXE，
-或手动执行 Windows EXE package 工作流下载产物。本项目文档不意味着已发布
-公开 Release。当前 EXE 没有代码签名，Windows 可能显示发布者未知。
+仓库提供 [EXE 下载入口](../dist/README.md)与 SHA-256 校验文件；维护者也可按
+[开发流程](DEVELOPMENT.md)构建，或手动执行 Windows EXE package 工作流下载产物。
+仓库中的下载包与 GitHub Releases 是不同入口，当前未创建独立 Release。
+当前 EXE 没有代码签名，Windows 可能显示发布者未知。
 
 ## 自启与插入设备的关系
 
