@@ -1,3 +1,6 @@
+<p align="center">
+  <img src="docs/images/logo.svg" alt="ESP32 Touch Toolbox logo" width="128"/>
+</p>
 
 <h1 align="center">ESP32 Touch Toolbox</h1>
 <p align="center">
@@ -6,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/<owner>/<repo>/actions/workflows/build.yml"><img src="https://github.com/<owner>/<repo>/actions/workflows/build.yml/badge.svg" alt="ESP-IDF build"/></a>
   <a href="https://www.espressif.com/en/products/socs/esp32"><img src="https://img.shields.io/badge/ESP--IDF-v5.5.4-3B82F6?logo=espressif&logoColor=white" alt="ESP-IDF v5.5.4"/></a>
   <a href="#"><img src="https://img.shields.io/badge/LVGL-8.4-8E6CE0" alt="LVGL 8.4"/></a>
   <a href="#"><img src="https://img.shields.io/badge/board-ESP32--WROOM--32E-16A34A" alt="ESP32-WROOM-32E"/></a>
@@ -15,9 +19,6 @@
 <!-- Replace <owner>/<repo> in the CI badge above with your GitHub repository. -->
 
 ---
-
-🌏 README in
-[**中文**](https://github.com/mengqy2022/Esp32-s3-touch/blob/main/docs/README_CN.md) 
 
 ## Overview
 

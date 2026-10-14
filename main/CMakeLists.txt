@@ -5,6 +5,8 @@ idf_component_register(
         "xpt2046.c"
         "sd_monitor.c"
         "ui.c"
+        "ui_theme.c"
+        "ui_widgets.c"
         "wifi_mgr.c"
         "lv_port.c"
         "net_utils.c"

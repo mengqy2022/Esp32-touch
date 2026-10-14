@@ -29,3 +29,9 @@ node_modules/
 
 # Serial inventory exports and personal backups
 *backup*.csv
+
+# Private purchase/inventory snapshots (keep out of the public repo)
+INVENTORY_[0-9]*.csv
+
+# Historical working notes (kept locally for reference, not published)
+docs/notes/

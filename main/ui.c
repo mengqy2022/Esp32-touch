@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "ui_theme.h"
 #include "inventory.h"
 #include "lcd_ili9341.h"
 #include "lv_port.h"
@@ -26,6 +27,8 @@
 extern const lv_font_t font_cn16;
 
 static const char *TAG = "ui";
+
+/* V2 design system: shared widgets/theme live in ui_theme.c */
 
 #define AUTO_PERIOD_US 3000000LL
 
