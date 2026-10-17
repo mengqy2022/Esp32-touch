@@ -117,7 +117,12 @@ class CodexUsage:
             state["seen"] = True
             if timestamp.astimezone().date() == day:
                 state["tokens"] += delta
-                tier = 'long' if fields and fields['input'] > 272000 else 'short'
+                # Context is per request, never the sum of a batch of requests.
+                context = info.get('context_tokens', payload.get('context_tokens'))
+                last_fields = usage_fields(info.get('last_token_usage'))
+                if type(context) is not int or context < 0:
+                    context = last_fields['input'] if last_fields else (fields['input'] if fields else 0)
+                tier = 'long' if context > 272000 else 'short'
                 counts = state['by_model'].setdefault(state['model'] + '|' + tier, dict(input=0, cached=0, cache_write=0, output=0, unpriced=0))
                 if fields is not None and fields['input'] + fields['output'] == delta and fields['cached'] + fields['cache_write'] <= fields['input']:
                     for key in fields:
@@ -173,5 +178,6 @@ def estimate_cny_fen(by_model, price_file):
 def codex_packet(tokens, goal, day, cost_fen=None):
     """Clamp to the signed 64-bit wire format supported by firmware."""
     ceiling = (1 << 63) - 1
-    packet = f"PC:CODEX|{max(-1, min(tokens, ceiling))}|{max(0, min(goal, ceiling))}|{day}"
+    # Keep the legacy goal argument for external scripts; the wire slot is always zero.
+    packet = f"PC:CODEX|{max(-1, min(tokens, ceiling))}|0|{day}"
     return packet if cost_fen is None else packet + f"|{max(-1, min(cost_fen, ceiling))}"

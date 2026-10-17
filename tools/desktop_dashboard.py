@@ -1,8 +1,9 @@
 """Small Windows executable: per-user install, login startup, USB monitoring.
 
-Uses native Windows dialogs; no GUI framework or administrator privileges.
+Uses native Windows dialogs. Only driver installation requests administrator rights.
 """
 import argparse
+from contextlib import contextmanager
 import ctypes
 from ctypes import wintypes
 import json
@@ -17,10 +18,208 @@ import winreg
 import serial.tools.list_ports
 
 from dashboard_agent import run_agent, matching_port
+from device_settings import (load_config, save_config, selected_device, query_ch340,
+                             driver_summary, install_signed_driver, WCH_PAGE)
+from ai_usage import SOURCES
 
 APP_NAME = 'ESP32TouchDashboard'
 RUN_KEY = r'Software\Microsoft\Windows\CurrentVersion\Run'
 APPROVED_KEY = r'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
+APP_VERSION = '2026.10.17.2'
+
+
+def resource_root():
+    return Path(getattr(sys, '_MEIPASS', Path(__file__).parent))
+
+
+def update_prices(root):
+    """Migrate shipped legacy rates; preserve user FX, custom rates and other models."""
+    path = root / 'codex_prices.json'
+    template = json.loads((resource_root() / 'codex_prices.json').read_text(encoding='utf-8'))
+    if not path.exists():
+        path.write_text(json.dumps(template, indent=2), encoding='utf-8')
+        return
+    current = json.loads(path.read_text(encoding='utf-8-sig'))
+    updated = json.loads(json.dumps(current))
+    old_rates = {
+        'gpt-6.1-sol': ([2, .1, 2.5, 10], [4, .2, 5, 15]),
+        'gpt-6-astra': ([10, 1, 12.5, 50], [20, 2, 25, 75]),
+    }
+    fields = ['input_per_million', 'cached_input_per_million', 'cache_write_input_per_million', 'output_per_million']
+    models = updated.setdefault('models', {})
+    for model, rates in template['models'].items():
+        old = models.get(model)
+        legacy = old_rates.get(model)
+        if old is None or (current.get('currency') == 'USD' and legacy and
+                           all([old.get(tier, {}).get(f) for f in fields] == expected
+                               for tier, expected in zip(('short', 'long'), legacy))):
+            # Do not copy USD defaults into a user-defined CNY price file.
+            if current.get('currency') == 'USD':
+                models[model] = rates
+    if current != updated:
+        backup = root / 'codex_prices.before-2026-10-17.json'
+        if not backup.exists():
+            shutil.copy2(path, backup)
+        path.write_text(json.dumps(updated, ensure_ascii=False, indent=2), encoding='utf-8')
+
+
+def choose_ai_source(root):
+    config = load_config(root / 'config.json')
+    selected = native_command_dialog('AI 用量来源（备用入口）', '优先在设备主页点选 CODEX / CLAUDE，设备会记住选择。\n也可以在此切换已连接设备的来源。',
+                                    [(202, 'Codex\n显示 Codex 的今日 Token 和估算金额'),
+                                     (203, 'Claude Code\n显示 Claude Code 的今日 Token 和估算金额')], root)
+    source = {202: 'codex', 203: 'claude'}.get(selected)
+    if source:
+        port = matching_port(serial.tools.list_ports.comports(), config['device'])
+        set_device_source(root, port, source)
+        config['ai_source'] = source
+        save_config(root / 'config.json', config)
+
+
+def com_settings(root):
+    while True:
+        config = load_config(root / 'config.json')
+        ports = list(serial.tools.list_ports.comports())
+        device = config['device']
+        selected_port = matching_port(ports, device)
+        info = '模式：' + ('手动固定端口' if device.get('mode') == 'manual' else '自动识别 CH340')
+        info += '\n目标端口：' + (selected_port or device.get('device', '未选择'))
+        info += '\n保存后自动生效；切换端口会释放原串口。\n'
+        info += '\n'.join(f'{p.device}：{p.description}' for p in ports) or '未发现 COM 端口'
+        buttons = [(301, '自动识别 CH340'), (302, '刷新端口列表'), (303, '检查连接\n暂时释放监控串口，检查 FILE:PONG 响应')]
+        buttons += [(400 + i, f'使用 {p.device}\n{p.description}') for i, p in enumerate(ports)]
+        selected = native_command_dialog('COM 检查与设置', info, buttons, root)
+        if selected == 301:
+            config['device'] = dict(vid=0x1A86, pid=0x7523, mode='auto')
+            save_config(root / 'config.json', config)
+        elif selected == 302:
+            continue
+        elif selected == 303:
+            check_connection(root, selected_port)
+        elif 400 <= selected < 400 + len(ports):
+            config['device'] = selected_device(ports[selected - 400])
+            save_config(root / 'config.json', config)
+        else:
+            return
+
+
+@contextmanager
+def device_connection(root, port):
+    if not port:
+        raise RuntimeError('没有已连接的目标串口。请插入设备并选择端口。')
+    marker = root / 'paused'
+    was_paused = marker.exists()
+    marker.touch()
+    try:
+        if is_running(root):
+            deadline = time.monotonic() + 16
+            while time.monotonic() < deadline:
+                try:
+                    state = json.loads((root / 'connection.json').read_text(encoding='utf-8'))
+                    if state.get('paused') and not state.get('worker') and time.time() - state['updated'] < 5:
+                        break
+                except (OSError, ValueError, KeyError):
+                    pass
+                time.sleep(.2)
+            else:
+                raise RuntimeError('后台尚未释放串口，请先暂停并升级旧后台程序。')
+        import serial
+        with serial.Serial(port=None, baudrate=115200, timeout=.2, write_timeout=2) as connection:
+            connection.dtr = False
+            connection.rts = False
+            connection.port = port
+            connection.open()
+            yield connection
+    finally:
+        if not was_paused:
+            marker.unlink(missing_ok=True)
+
+
+def set_device_source(root, port, source):
+    label = SOURCES[source]
+    with device_connection(root, port) as connection:
+        connection.reset_input_buffer()
+        connection.write(('PC:AI|' + label + '\nPC:AI?\n').encode('ascii'))
+        deadline = time.monotonic() + 3
+        received = b''
+        expected = ('PC:AI_STATE|' + label + '|').encode('ascii')
+        while time.monotonic() < deadline:
+            received = (received + connection.read(connection.in_waiting or 1))[-8192:]
+            if expected in received:
+                return
+        raise RuntimeError('设备未确认来源切换，请确认固件已升级。')
+
+
+def check_connection(root, port):
+    try:
+        with device_connection(root, port) as connection:
+            connection.write(b'FILE:PING\n')
+            deadline = time.monotonic() + 3
+            received = b''
+            while time.monotonic() < deadline:
+                received = (received + connection.read(connection.in_waiting or 1))[-8192:]
+                if b'FILE:PONG' in received:
+                    message(port + ' 连接正常，设备已响应 FILE:PONG。')
+                    return
+            message(port + ' 可以打开，但未收到设备响应。请检查固件、设备选择或连接。')
+    except (OSError, RuntimeError) as error:
+        message('连接检查失败：' + str(error), 16)
+
+
+def choose_driver_file(root):
+    class OpenFileName(ctypes.Structure):
+        _fields_ = [('lStructSize', wintypes.DWORD), ('hwndOwner', wintypes.HWND),
+                    ('hInstance', wintypes.HINSTANCE), ('lpstrFilter', wintypes.LPCWSTR),
+                    ('lpstrCustomFilter', wintypes.LPWSTR), ('nMaxCustFilter', wintypes.DWORD),
+                    ('nFilterIndex', wintypes.DWORD), ('lpstrFile', wintypes.LPWSTR),
+                    ('nMaxFile', wintypes.DWORD), ('lpstrFileTitle', wintypes.LPWSTR),
+                    ('nMaxFileTitle', wintypes.DWORD), ('lpstrInitialDir', wintypes.LPCWSTR),
+                    ('lpstrTitle', wintypes.LPCWSTR), ('Flags', wintypes.DWORD),
+                    ('nFileOffset', wintypes.WORD), ('nFileExtension', wintypes.WORD),
+                    ('lpstrDefExt', wintypes.LPCWSTR), ('lCustData', wintypes.LPARAM),
+                    ('lpfnHook', ctypes.c_void_p), ('lpTemplateName', wintypes.LPCWSTR),
+                    ('pvReserved', ctypes.c_void_p), ('dwReserved', wintypes.DWORD), ('FlagsEx', wintypes.DWORD)]
+    buffer = ctypes.create_unicode_buffer(32768)
+    dialog = OpenFileName(lStructSize=ctypes.sizeof(OpenFileName), lpstrFilter='WCH 安装程序\0*.exe\0\0',
+                          lpstrFile=ctypes.cast(buffer, wintypes.LPWSTR), nMaxFile=len(buffer),
+                          lpstrTitle='选择 WCH 官方 CH341SER.EXE', Flags=0x1800)
+    api = ctypes.WinDLL('comdlg32')
+    api.GetOpenFileNameW.argtypes = [ctypes.POINTER(OpenFileName)]
+    if api.GetOpenFileNameW(ctypes.byref(dialog)):
+        target = root / 'drivers' / 'CH341SER.EXE'
+        target.parent.mkdir(exist_ok=True)
+        if Path(buffer.value).resolve() != target.resolve():
+            shutil.copy2(buffer.value, target)
+        install_signed_driver(target)
+
+
+def driver_dialog(root):
+    while True:
+        status = driver_summary(query_ch340())
+        selected = native_command_dialog('CH340 驱动检查', status + '\n安装时由 Windows 请求管理员权限。\n安装完成后重新插拔设备，再刷新检查。',
+                                         [(501, '自动下载并安装\n从 WCH 官方服务器下载，验证发布者签名'),
+                                          (502, '打开 WCH 官方下载页面'), (503, '安装已下载的官方驱动'), (504, '刷新驱动状态')], root)
+        try:
+            if selected == 501:
+                from urllib.request import Request, urlopen
+                target = root / 'drivers' / 'CH341SER.EXE'
+                target.parent.mkdir(exist_ok=True)
+                request = Request('https://api1.wch.cn/api/official/website/common/downloadFile?fileName=CH341SER.EXE',
+                                  headers={'Referer': WCH_PAGE, 'User-Agent': 'Mozilla/5.0'})
+                with urlopen(request, timeout=30) as response:
+                    data = response.read(32 * 1024 * 1024 + 1)
+                if not data.startswith(b'MZ') or len(data) > 32 * 1024 * 1024:
+                    raise RuntimeError('WCH 下载校验未通过，请打开官方页面下载，再选择“安装已下载的官方驱动”。')
+                target.write_bytes(data)
+                install_signed_driver(target)
+            elif selected == 502:
+                os.startfile(WCH_PAGE)
+            elif selected == 503:
+                choose_driver_file(root)
+            elif selected != 504:
+                return
+        except (OSError, RuntimeError, ValueError) as error:
+            message(str(error), 16)
 
 
 def install_root():
@@ -71,13 +270,21 @@ def control_dialog(root):
     status = startup_status(root)
     title = '开机自启：' + ('已启用' if status['enabled'] else '未启用')
     info = '监控：' + ('已暂停' if status['paused'] else '自动连接设备')
-    info += '\nWindows 登录后在后台运行，插入设备后自动连接。\nToken 和人民币估算费用约每 5 秒更新。'
+    config = load_config(root / 'config.json')
+    ports = list(serial.tools.list_ports.comports())
+    port = matching_port(ports, config['device'])
+    info += '\n串口：' + (port or '等待设备')
+    info += '\n用量切换：在设备主页点选 CODEX / CLAUDE'
+    info += '\nWindows 登录后在后台运行。Token 和人民币估算费用约每 5 秒更新。'
     buttons = [(101, '启用开机自启\n登录后自动运行，并恢复设备监控'),
                (102, '关闭开机自启\n下次登录时不自动运行'),
                (103, '暂停监控\n释放串口，方便烧录或使用其他串口工具'),
                (104, '恢复监控\n自动等待并连接设备'),
                (105, '修改价格和汇率\n打开人民币估算费用配置'),
-               (106, '查看运行日志\n查看设备连接和用量更新记录')]
+               (106, '查看运行日志\n查看设备连接和用量更新记录'),
+               (107, 'COM 检查与设置\n自动识别、选择端口、测试连接'),
+               (108, 'CH340 驱动检查与安装\n检测缺失驱动，从官方来源安装'),
+               (109, '切换 AI 用量来源（备用）\n优先在设备主页点选 CODEX / CLAUDE')]
     try:
         selected = native_command_dialog(title, info, buttons, root)
     except (OSError, AttributeError):
@@ -99,6 +306,12 @@ def control_dialog(root):
         os.startfile(root / 'codex_prices.json')
     elif selected == 106:
         os.startfile(root / 'host.log')
+    elif selected == 107:
+        com_settings(root)
+    elif selected == 108:
+        driver_dialog(root)
+    elif selected == 109:
+        choose_ai_source(root)
 
 
 def native_command_dialog(title, info, buttons, root):
@@ -200,9 +413,7 @@ def install(quiet=False):
         if is_running(root):
             raise RuntimeError('已有安装正在运行。请先在任务管理器结束 ESP32TouchDashboard，再更新 EXE。')
         shutil.copy2(sys.executable, target)
-    prices = root / 'codex_prices.json'
-    if not prices.exists():
-        shutil.copy2(Path(sys._MEIPASS) / 'codex_prices.json', prices)
+    update_prices(root)
     config = root / 'config.json'
     if not config.exists():
         device = dict(vid=0x1A86, pid=0x7523)
@@ -210,7 +421,10 @@ def install(quiet=False):
         if len(candidates) == 1:
             p = candidates[0]
             device.update(device=p.device, location=p.location, serial_number=p.serial_number)
-        config.write_text(json.dumps(dict(device=device, codex_refresh=5, daily_goal=0), ensure_ascii=False, indent=2), encoding='utf-8')
+        save_config(config, dict(device=device, codex_refresh=5, ai_source='codex'))
+    else:
+        save_config(config, load_config(config))
+    (root / 'version.txt').write_text(APP_VERSION, encoding='ascii')
     autostart(True)
     # A Start-menu entry opens the lightweight control dialog.
     shortcut = Path(os.environ['APPDATA']) / 'Microsoft/Windows/Start Menu/Programs/ESP32 Touch Dashboard.lnk'
@@ -221,16 +435,18 @@ def install(quiet=False):
                    creationflags=subprocess.CREATE_NO_WINDOW, check=True)
     resume(root)
     if not quiet:
-        message('已安装并启用登录自启。\n\n插入设备后会自动更新 PC、Token 和人民币估算费用。\n从开始菜单打开 ESP32 Touch Dashboard 可以暂停或恢复。\n\n安装位置：' + str(root))
+        message('已安装并启用登录自启。\n\n插入设备后会自动更新 PC 状态、所选来源的 Token 和人民币估算费用。\n从开始菜单打开 ESP32 Touch Dashboard 可检查 COM、安装驱动、切换 Codex / Claude Code。\n\n安装位置：' + str(root))
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--version', action='version', version=APP_VERSION)
     parser.add_argument('--install', action='store_true')
     parser.add_argument('--quiet', action='store_true')
     parser.add_argument('--background', action='store_true')
     parser.add_argument('--pause', action='store_true')
     parser.add_argument('--resume', action='store_true')
+    parser.add_argument('--ai-source', choices=tuple(SOURCES), help='Select a connected device source once')
     parser.add_argument('--enable-autostart', action='store_true')
     parser.add_argument('--disable-autostart', action='store_true')
     parser.add_argument('--self-test', metavar='REPORT')
@@ -241,16 +457,26 @@ def main():
         Path(args.status).write_text(json.dumps(startup_status(root), ensure_ascii=False, indent=2), encoding='utf-8')
         return
     if args.self_test:
-        from codex_usage import CodexUsage, estimate_cny_fen
-        usage = CodexUsage()
-        tokens, day = usage.read()
-        prices = Path(sys._MEIPASS) / 'codex_prices.json'
-        report = dict(tokens=tokens, day=day, estimated_cny_fen=estimate_cny_fen(usage.by_model, prices),
+        from ai_usage import AIUsage
+        usage = AIUsage()
+        prices = resource_root() / 'codex_prices.json'
+        sources = {}
+        for provider in SOURCES:
+            tokens, day, cost, label = usage.sample(provider, prices)
+            sources[provider] = dict(tokens=tokens, day=day, estimated_cny_fen=cost, label=label)
+        report = dict(sources=sources,
                       ports=[p.device for p in serial.tools.list_ports.comports()],
-                      models=sorted(usage.by_model), executable=sys.executable)
+                      models=sorted(set(usage.readers['codex'].by_model) | set(usage.readers['claude'].by_model)),
+                      driver=driver_summary(query_ch340()), executable=sys.executable)
         Path(args.self_test).write_text(json.dumps(report, indent=2), encoding='utf-8')
         return
-    if args.install:
+    if args.ai_source:
+        config = load_config(root / 'config.json')
+        port = matching_port(serial.tools.list_ports.comports(), config['device'])
+        set_device_source(root, port, args.ai_source)
+        config['ai_source'] = args.ai_source
+        save_config(root / 'config.json', config)
+    elif args.install:
         install(args.quiet)
     elif args.background:
         run_agent(root / 'config.json')

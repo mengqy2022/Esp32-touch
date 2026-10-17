@@ -50,6 +50,12 @@ terminal host path; its behavior was not newly verified on hardware in this upda
 
 ## Windows EXE packaging
 
+本机为避免占用 C 盘，`build_exe.ps1` 默认将打包环境、临时文件、缓存和输出放在
+`F:\ESP32TouchDashboard-work\2026-10-17`，可用 `-WorkRoot` 改位置。
+EXE 和校验和位于该目录的 `output/`。需要更新仓库发布副本时显式加
+`-PublishToRepository`。Windows CI 使用 runner 临时目录，不依赖 F 盘。
+本机固件可用 ESP-IDF 终端运行 `./build_firmware.ps1`，同样使用 F 盘构建与缓存。
+
 On Windows, with Python 3.11 x64 available:
 
 ```powershell
@@ -78,6 +84,9 @@ From the repository root:
 ```sh
 python -m unittest discover -s tools -p test_codex_usage.py -v
 python -m unittest discover -s tools -p test_dashboard_agent.py -v
+python -m unittest discover -s tools -p test_ai_usage.py -v
+python -m unittest discover -s tools -p test_device_settings.py -v
+python -m unittest discover -s tools -p test_desktop_settings.py -v
 python -m py_compile tools/codex_usage.py tools/dashboard_agent.py tools/desktop_dashboard.py tools/pc_monitor_host.py
 git diff --check
 ```
@@ -92,6 +101,13 @@ These unit tests do not verify native dialogs, actual serial access or Windows l
 
 These checks require a real device or Windows desktop and must not be included in
 unrestricted unit-test discovery.
+
+For independent AI caches and persistent selection, pause the companion and run
+`python tools/test_device_ai_switch.py --port COM5`. It uses synthetic counters,
+calls the same selection function as the touch buttons through the serial protocol,
+checks reboot persistence, then restores the original source. Resume the companion
+afterward to replace test counts with real usage. This does not replace tapping the
+physical CODEX / CLAUDE buttons and inspecting their highlight and displayed values.
 
 1. Pause the installed agent and close serial monitors. Confirm another client can
    open the device port.

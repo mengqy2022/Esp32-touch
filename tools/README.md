@@ -12,6 +12,8 @@ python -m pip install -r tools/requirements.txt
 | --- | --- |
 | `pc_monitor_host.py` | Sends PC stats, time, timezone and Codex telemetry over serial; receives device log output. |
 | `codex_usage.py` | Incremental local session-log reader and configurable CNY estimator. |
+| `ai_usage.py` | Claude Code transcript reader, message deduplication, independent Codex/Claude selection. |
+| `device_settings.py` | Config validation, COM settings, Windows PnP and signed driver installation. |
 | `dashboard_agent.py` | Windows single-instance background supervisor, device matching, pause marker and rotating logs. |
 | `desktop_dashboard.py` | Windows EXE entry, per-user installation, login startup and native control dialog. |
 | `codex_prices.json` | Generic user-supplied price example; not an official price feed. |
@@ -19,7 +21,7 @@ python -m pip install -r tools/requirements.txt
 ```sh
 python tools/pc_monitor_host.py --list-ports
 python tools/pc_monitor_host.py --port COM5 --codex-prices tools/codex_prices.json
-python tools/pc_monitor_host.py --port COM5 --codex-daily-goal 1000000 --codex-prices tools/codex_prices.json
+python tools/pc_monitor_host.py --port COM5 --ai-source claude --codex-prices tools/codex_prices.json
 python tools/pc_monitor_host.py --port COM5 --no-codex
 ```
 
@@ -27,6 +29,11 @@ python tools/pc_monitor_host.py --port COM5 --no-codex
 is used. `--codex-refresh` defaults to 5 seconds. `--interval` controls approximate
 PC sampling cadence. Run `--help` for all options. The source host is foreground;
 use the packaged EXE for Windows login startup and background supervision.
+
+The host sends independent Codex and Claude caches without changing the device's
+touch selection. Explicit `--ai-source codex|claude` selects once at startup. Claude Code
+uses `CLAUDE_CONFIG_DIR` or `~/.claude`, override with `--claude-home`. The legacy
+`--no-codex` option disables all AI telemetry. There is no daily goal setting.
 
 Windows CPU/RAM use ctypes; NVIDIA GPU telemetry uses the existing driver NVML
 library; WMI CPU temperatures are best effort. The existing Linux path uses
@@ -61,6 +68,8 @@ inventory outside version control; the tracked SD template is public sample data
 ```sh
 python -m unittest discover -s tools -p test_codex_usage.py -v
 python -m unittest discover -s tools -p test_dashboard_agent.py -v
+python -m unittest discover -s tools -p test_ai_usage.py -v
+python -m unittest discover -s tools -p test_device_settings.py -v
 ```
 
 These tests use synthetic logs and ports. `test_serial_burst.py` requires exclusive

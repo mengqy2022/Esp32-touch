@@ -11,6 +11,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "net_utils.h"
+#include "nvs.h"
 
 static const char *TAG = "pcmon";
 
@@ -21,9 +22,51 @@ static pc_monitor_status_t s_state;
 static int64_t s_last_pkt_us;
 static bool s_rx_since_boot;
 static uint32_t s_stat_count;
-static int64_t s_last_codex_us;
-static bool s_codex_received;
+typedef struct {
+    int64_t tokens;
+    int64_t cost_fen;
+    int day;
+    int64_t received_us;
+    bool received;
+} ai_usage_t;
+static ai_usage_t s_usage[2]; // Codex and Claude are cached independently.
+static int s_ai_selected;
 static portMUX_TYPE s_lock = portMUX_INITIALIZER_UNLOCKED;
+
+static int ai_index(const char *source)
+{
+    if (!strcmp(source, "CODEX")) return 0;
+    if (!strcmp(source, "CLAUDE")) return 1;
+    return -1;
+}
+
+static const char *ai_name(int index)
+{
+    return index == 1 ? "CLAUDE" : "CODEX";
+}
+
+bool pc_monitor_select_ai_source(const char *source)
+{
+    if (!source) return false;
+    int index = ai_index(source);
+    if (index < 0) return false;
+    portENTER_CRITICAL(&s_lock);
+    bool changed = s_ai_selected != index;
+    s_ai_selected = index;
+    portEXIT_CRITICAL(&s_lock);
+    if (changed) {
+        nvs_handle_t handle;
+        esp_err_t err = nvs_open("pcmon", NVS_READWRITE, &handle);
+        if (err == ESP_OK) {
+            err = nvs_set_u8(handle, "ai_source", (uint8_t)index);
+            if (err == ESP_OK) err = nvs_commit(handle);
+            nvs_close(handle);
+        }
+        if (err != ESP_OK) ESP_LOGW(TAG, "AI source preference not saved: %s", esp_err_to_name(err));
+        ESP_LOGI(TAG, "AI source selected: %s", source);
+    }
+    return true;
+}
 
 void pc_monitor_init(void)
 {
@@ -37,8 +80,18 @@ void pc_monitor_init(void)
     s_state.mem_total_mb = -1;
     s_state.codex_tokens = -1;
     s_state.codex_cost_fen = -1;
-    s_last_codex_us = 0;
-    s_codex_received = false;
+    memset(s_usage, 0, sizeof(s_usage));
+    for (int i = 0; i < 2; ++i) {
+        s_usage[i].tokens = -1;
+        s_usage[i].cost_fen = -1;
+    }
+    uint8_t selected = 0;
+    nvs_handle_t handle;
+    if (nvs_open("pcmon", NVS_READONLY, &handle) == ESP_OK) {
+        nvs_get_u8(handle, "ai_source", &selected);
+        nvs_close(handle);
+    }
+    s_ai_selected = selected == 1 ? 1 : 0;
     s_last_pkt_us = 0;
     s_rx_since_boot = false;
 }
@@ -144,6 +197,37 @@ static void handle_name(const char *p)
     portEXIT_CRITICAL(&s_lock);
 }
 
+static void handle_usage(const char *p, int index)
+{
+    char *end;
+    errno = 0;
+    long long used = strtoll(p, &end, 10);
+    if (end == p || *end != '|' || errno || used < -1) return;
+    p = end + 1;
+    long long reserved = strtoll(p, &end, 10); // accept old hosts' goal, ignore it
+    if (end == p || *end != '|' || errno || reserved < 0) return;
+    p = end + 1;
+    long day = strtol(p, &end, 10);
+    if (end == p || (*end && *end != '|') || errno || day < 20200101 || day > 20991231) return;
+    long long cost = -1;
+    if (*end == '|') {
+        p = end + 1;
+        cost = strtoll(p, &end, 10);
+        if (end == p || *end || errno || cost < -1) return;
+    }
+    portENTER_CRITICAL(&s_lock);
+    ai_usage_t *usage = &s_usage[index];
+    bool first = !usage->received;
+    usage->tokens = used;
+    usage->cost_fen = cost;
+    usage->day = (int)day;
+    usage->received = true;
+    usage->received_us = esp_timer_get_time();
+    portEXIT_CRITICAL(&s_lock);
+    if (first) ESP_LOGI(TAG, "%s usage online: %lld tokens, day=%ld, estimated_CNY_fen=%lld",
+                        index == 1 ? "Claude" : "Codex", used, day, cost);
+}
+
 void pc_monitor_handle_line(const char *line)
 {
     if (!line) return;
@@ -156,34 +240,22 @@ void pc_monitor_handle_line(const char *line)
         handle_tzoff(line + 6);
     } else if (strncmp(line, "NAME|", 5) == 0) {
         handle_name(line + 5);
+    } else if (strncmp(line, "AI|", 3) == 0) {
+        pc_monitor_select_ai_source(line + 3);
+    } else if (strcmp(line, "AI?") == 0) {
+        pc_monitor_status_t state;
+        pc_monitor_get(&state);
+        printf("PC:AI_STATE|%s|%lld|%d|%lld|%d\n", state.ai_source,
+               (long long)state.codex_tokens, state.codex_day,
+               (long long)state.codex_cost_fen, state.codex_link ? 1 : 0);
+    } else if (strncmp(line, "USAGE|", 6) == 0) {
+        if (strncmp(line + 6, "CODEX|", 6) == 0) handle_usage(line + 12, 0);
+        else if (strncmp(line + 6, "CLAUDE|", 7) == 0) handle_usage(line + 13, 1);
     } else if (strncmp(line, "CODEX|", 6) == 0) {
-        const char *p = line + 6;
-        char *end;
-        errno = 0;
-        long long used = strtoll(p, &end, 10);
-        if (end == p || *end != '|' || errno || used < -1) return;
-        p = end + 1;
-        long long goal = strtoll(p, &end, 10);
-        if (end == p || *end != '|' || errno || goal < 0) return;
-        p = end + 1;
-        long day = strtol(p, &end, 10);
-        if (end == p || (*end && *end != '|') || errno || day < 20200101 || day > 20991231) return;
-        long long cost = -1;
-        if (*end == '|') {
-            p = end + 1;
-            cost = strtoll(p, &end, 10);
-            if (end == p || *end || errno || cost < -1) return;
-        }
         portENTER_CRITICAL(&s_lock);
-        s_state.codex_tokens = used;
-        s_state.codex_goal = goal;
-        s_state.codex_day = (int)day;
-        s_state.codex_cost_fen = cost;
-        bool first = !s_codex_received;
-        s_codex_received = true;
-        s_last_codex_us = esp_timer_get_time();
+        int selected = s_ai_selected;
         portEXIT_CRITICAL(&s_lock);
-        if (first) ESP_LOGI(TAG, "Codex usage online: %lld tokens, goal=%lld, day=%ld, estimated_CNY_fen=%lld", used, goal, day, cost);
+        handle_usage(line + 6, selected); // Legacy selected-source packet.
     } else {
         // Unknown PC: command - ignore (forward compatible).
         return;
@@ -196,9 +268,14 @@ void pc_monitor_get(pc_monitor_status_t *out)
     int64_t now_us = esp_timer_get_time();
     portENTER_CRITICAL(&s_lock);
     *out = s_state;
+    const ai_usage_t *usage = &s_usage[s_ai_selected];
+    snprintf(out->ai_source, sizeof(out->ai_source), "%s", ai_name(s_ai_selected));
+    out->codex_tokens = usage->tokens;
+    out->codex_cost_fen = usage->cost_fen;
+    out->codex_day = usage->day;
     bool received = s_rx_since_boot;
     int64_t last_pkt_us = s_last_pkt_us;
-    out->codex_link = s_codex_received && now_us - s_last_codex_us < 90000000LL;
+    out->codex_link = usage->received && now_us - usage->received_us < 90000000LL;
     portEXIT_CRITICAL(&s_lock);
 
     if (!received) {

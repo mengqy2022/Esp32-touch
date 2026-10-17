@@ -1,11 +1,11 @@
 # ESP32 触摸仪表盘与工具箱
 
-[![固件构建](https://github.com/mengqy2022/Esp32-s3-touch/actions/workflows/build.yml/badge.svg)](https://github.com/mengqy2022/Esp32-s3-touch/actions/workflows/build.yml)
-[![主机测试](https://github.com/mengqy2022/Esp32-s3-touch/actions/workflows/host-tests.yml/badge.svg)](https://github.com/mengqy2022/Esp32-s3-touch/actions/workflows/host-tests.yml)
+[![固件构建](https://github.com/mengqy2022/Esp32-touch/actions/workflows/build.yml/badge.svg)](https://github.com/mengqy2022/Esp32-touch/actions/workflows/build.yml)
+[![主机测试](https://github.com/mengqy2022/Esp32-touch/actions/workflows/host-tests.yml/badge.svg)](https://github.com/mengqy2022/Esp32-touch/actions/workflows/host-tests.yml)
 
 [English](README.md) · [文档目录](docs/README.md) · [更新记录](CHANGELOG.md)
 
-本项目把电脑监控和本机 Codex 今日 Token／人民币估算费用直接放在
+本项目把电脑监控和本机 Codex／Claude Code 今日 Token／人民币估算费用直接放在
 320×240 触摸主界面上。小游戏、系统工具、元器件库存和单词实验室通过
 GAME、SYSTEM、OTHER 三个分类进入。Windows 配套 EXE 负责采集与发送数据，
 安装后在用户登录时启动，未插设备时等待，插入后自动连接。
@@ -19,11 +19,11 @@ GAME、SYSTEM、OTHER 三个分类进入。Windows 配套 EXE 负责采集与发
 | 页面／程序 | 功能 |
 | --- | --- |
 | 主界面 | 日期、星期、Wi-Fi 状态、时钟；CPU/GPU/RAM 圆环、温度、内存用量。闲置时继续显示主页。 |
-| CODEX 卡片 | 今日输入＋输出 Token；可选的个人目标进度；`~¥` 人民币估算费用，约每 5 秒更新。 |
+| AI 用量卡片 | 在设备主页点选 CODEX／CLAUDE，独立查看今日用量并记住选择；左侧 Token、右侧 `~¥` 人民币估算金额，约每 5 秒更新，无每日限额。 |
 | GAME | SUDOKU 数独、2048、FLAPPY。 |
 | SYSTEM | SD CHECK、SYSTEM INFO、WIFI、CALIBRATE、PC DETAILS。 |
 | OTHER | INVENTORY 库存／BOM、VOCAB LAB 本地词书与学习计划、间隔复习、触屏默写。 |
-| Windows EXE | 当前用户安装、登录自启开关、设备检测、暂停／恢复、修改价格和汇率、查看轮换日志。 |
+| Windows EXE | 当前用户安装、登录自启、COM 检查与选择、CH340 驱动检查与安装入口、AI 来源切换、暂停／恢复、价格配置和日志。 |
 
 工具的 BACK 返回对应分类，分类的 BACK 返回主页，PC DETAILS 点击返回主页。
 电脑数据需要 PC 配套程序持续运行；离线游戏和本地工具可独立使用。
@@ -31,7 +31,7 @@ GAME、SYSTEM、OTHER 三个分类进入。Windows 配套 EXE 负责采集与发
 
 ## EXE 快速使用
 
-1. [下载 ESP32TouchDashboard.exe](https://github.com/mengqy2022/Esp32-s3-touch/raw/refs/heads/main/dist/ESP32TouchDashboard.exe)，
+1. [下载 ESP32TouchDashboard.exe](https://github.com/mengqy2022/Esp32-touch/raw/refs/heads/main/dist/ESP32TouchDashboard.exe)，
    或按下文自行构建。仓库 [dist 下载说明](dist/README.md)包含 Windows x64 程序与 SHA-256 校验文件。
 2. 把设备接到电脑，确认设备管理器出现串口。测试板使用 CH340，必要时安装对应驱动。
 3. 双击 EXE 并选择安装。无需 Python 或管理员权限，安装在
@@ -46,7 +46,9 @@ GAME、SYSTEM、OTHER 三个分类进入。Windows 配套 EXE 负责采集与发
 
 ## Token 与人民币金额
 
-统计来源为本机 Codex 会话日志，按电脑本地日期汇总输入和输出。
+统计来源为本机 Codex 和 Claude Code 会话日志，按电脑本地日期汇总输入和输出。
+直接点选设备主页用量卡片上的 CODEX／CLAUDE，立即切换各自的 Token 与金额。
+设备记住选择，电脑刷新／重连不会覆盖；EXE 控制窗口提供备用切换入口。
 缓存输入已经包含在输入计数中。金额按模型的普通输入、缓存读取、缓存写入、
 输出单价分别估算，再换算人民币，显示如 `~¥12.34`。
 默认示例单价由使用者提供，汇率 7.20 可修改，详见 [统计与价格说明](docs/CODEX_USAGE_CN.md)。

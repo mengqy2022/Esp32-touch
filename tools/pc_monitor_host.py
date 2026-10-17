@@ -13,7 +13,7 @@ Wire protocol (ASCII lines, one per line, sent TO the device):
     PC:TZOFF|<minutes east of UTC>      once at startup
     PC:TIME|<unix seconds>              every 15 s (keeps the clock accurate)
     PC:STAT|<cpu%>|<gpu%>|<cpu_C>|<gpu_C>|<mem%>|<used_MB>|<total_MB>
-    PC:CODEX|<today_tokens>|<personal_daily_goal>|<YYYYMMDD>
+    PC:USAGE|CODEX/CLAUDE|<today_tokens>|0|<YYYYMMDD>|<estimated_CNY_fen>
 
 Usage:
     pip install pyserial
@@ -39,7 +39,7 @@ import subprocess
 import sys
 import time
 
-from codex_usage import CodexUsage, codex_packet, estimate_cny_fen
+from ai_usage import AIUsage, SOURCES, ai_packet
 
 IS_WINDOWS = platform.system() == "Windows"
 
@@ -354,16 +354,17 @@ def main(argv=None, stop_event=None):
                     help="遥测发送间隔秒数 (默认 1.0)")
     ap.add_argument("--list-ports", action="store_true", help="列出可用串口后退出")
     ap.add_argument("--codex-home", help="Codex 日志目录，默认 CODEX_HOME 或 ~/.codex")
-    ap.add_argument("--codex-daily-goal", type=int, default=0,
-                    help="自设每日 Token 目标，0 表示只显示用量；不是套餐额度")
-    ap.add_argument("--no-codex", action="store_true", help="关闭本机 Codex 日志统计")
+    ap.add_argument("--no-codex", '--no-ai', dest='no_codex', action="store_true", help="关闭本机 AI 用量统计")
     ap.add_argument('--codex-refresh', type=float, default=5, help='Codex 自动更新间隔秒数，默认 5')
     ap.add_argument('--codex-prices', help='人民币模型单价 JSON；未配置时金额显示 --')
+    ap.add_argument('--ai-source', choices=('codex', 'claude'),
+                    help='可选：启动时选择设备来源一次；默认保留设备选择，两套用量均独立发送')
+    ap.add_argument('--claude-home', help='Claude Code 配置目录，默认 CLAUDE_CONFIG_DIR 或 ~/.claude')
     ap.add_argument("--duration", type=float, default=0,
                     help="运行指定秒数后退出，0 表示持续运行")
     args = ap.parse_args(argv)
-    if args.codex_daily_goal < 0 or args.interval <= 0 or args.duration < 0 or args.codex_refresh <= 0:
-        ap.error("每日目标和运行时长不能为负，发送间隔必须大于零")
+    if args.interval <= 0 or args.duration < 0 or args.codex_refresh <= 0:
+        ap.error("运行时长不能为负，发送间隔必须大于零")
 
     if args.list_ports:
         list_ports()
@@ -383,7 +384,7 @@ def main(argv=None, stop_event=None):
     tmp = CpuTempProbe()
     gpu = GpuProbe()
 
-    usage = CodexUsage(args.codex_home)
+    usage = AIUsage(args.codex_home, args.claude_home)
     codex_line = None
     last_codex_read = 0.0
     ser = connect(port, args.baud, stop_event)
@@ -391,6 +392,7 @@ def main(argv=None, stop_event=None):
         return
     last_time_sync = 0.0
     first = True
+    select_source = args.ai_source
     started = time.monotonic()
 
     while stop_event is None or not stop_event.is_set():
@@ -406,6 +408,8 @@ def main(argv=None, stop_event=None):
             boot = first or now - last_time_sync >= 15.0
 
             lines = []
+            if select_source and not args.no_codex:
+                lines.append('PC:AI|' + SOURCES[select_source])
             if first:
                 lines.append(f"PC:TZOFF|{tz_offset_minutes()}")
                 lines.append(f"PC:NAME|{hostname}")
@@ -417,15 +421,18 @@ def main(argv=None, stop_event=None):
             lines.append(f"PC:STAT|{cpu}|{gpu_load}|{cpu_temp}|{gpu_temp}|{mem}|{mem_used}|{mem_total}")
             if not args.no_codex:
                 if codex_line is None or now - last_codex_read >= args.codex_refresh:
-                    tokens, day = usage.read()
-                    cost = estimate_cny_fen(usage.by_model, args.codex_prices) if args.codex_prices and tokens >= 0 else -1
-                    codex_line = codex_packet(tokens, args.codex_daily_goal, day, cost)
+                    packets = []
+                    for source in SOURCES:
+                        tokens, day, cost, label = usage.sample(source, args.codex_prices)
+                        packets.append(ai_packet(tokens, day, cost, label))
+                        print(f"{label}| today={tokens} tokens estimated_cny={'--' if cost < 0 else format(cost / 100, '.2f')} date={day}", flush=True)
+                    codex_line = '\n'.join(packets)
                     last_codex_read = now
-                    print(f"CODEX| today={tokens} tokens estimated_cny={'--' if cost < 0 else format(cost / 100, '.2f')} date={day}", flush=True)
                 lines.append(codex_line)
 
             for line in lines:
                 ser.write(line.encode("ascii") + b"\n")
+            select_source = None
             first = False
             # Drain device log output (ESP_LOG / FILE: lines) so the host-side RX
             # buffer never fills up. Pass it through as "DEV| ..." so both

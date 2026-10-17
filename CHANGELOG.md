@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-10-17 dashboard upgrade
+
+- Add CODEX / CLAUDE touch selection on the device, saved in NVS. Stream independent provider caches without overriding selection; retain an acknowledged one-time EXE selection as fallback.
+- Add COM enumeration, manual selection, live settings reload and coordinated PING/PONG checks.
+- Add CH340 PnP diagnostics and official WCH download/signed installer entry points; driver installation uses UAC.
+- Add Claude Code local transcript usage, duplicate message handling, cache accounting and independent Codex/Claude selection (default Codex).
+- Move the estimated CNY cost into the lower right of the usage card, aligned with the token value, with larger text; migrate the earlier combined-source setting to Codex.
+- Remove AI daily goals and progress bar, retaining a zero protocol slot for older firmware.
+- Apply user-provided GPT and claude-fable-5-1 prices; prefer context_tokens and per-request input for the 272K tier.
+- Migrate legacy default USD prices with backup while preserving custom rates and FX.
+
 ### Added
 
 - Home dashboard with CPU/GPU/RAM rings and local Codex daily tokens, optional

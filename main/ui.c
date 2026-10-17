@@ -83,7 +83,7 @@ static lv_obj_t *s_home_arc[3];
 static lv_obj_t *s_home_value[3];
 static lv_obj_t *s_home_detail[3];
 static lv_obj_t *s_codex_value;
-static lv_obj_t *s_codex_bar;
+static lv_obj_t *s_ai_tabs[2];
 static lv_obj_t *s_codex_state;
 static ui_screen_t s_menu_parent = SCREEN_MENU;
 
@@ -599,7 +599,7 @@ static lv_obj_t *home_label(lv_obj_t *parent, const char *text, int x, int y, in
 static bool money_glyph_dsc(const lv_font_t *font, lv_font_glyph_dsc_t *out, uint32_t letter, uint32_t next)
 {
     (void)font;
-    if (letter != 0xA5) return lv_font_get_glyph_dsc(&lv_font_montserrat_14, out, letter, next);
+    if (letter != 0xA5) return lv_font_get_glyph_dsc(&lv_font_montserrat_16, out, letter, next);
     out->adv_w = 9;
     out->box_w = 8;
     out->box_h = 12;
@@ -613,13 +613,20 @@ static const uint8_t *money_glyph_bitmap(const lv_font_t *font, uint32_t letter)
 {
     (void)font;
     static const uint8_t yen[] = {0xC6, 0xC6, 0x6C, 0x6C, 0x38, 0x38, 0xFE, 0x38, 0xFE, 0x38, 0x38, 0x38};
-    return letter == 0xA5 ? yen : lv_font_get_glyph_bitmap(&lv_font_montserrat_14, letter);
+    return letter == 0xA5 ? yen : lv_font_get_glyph_bitmap(&lv_font_montserrat_16, letter);
 }
 
 static const lv_font_t s_money_font = {
     .get_glyph_dsc = money_glyph_dsc, .get_glyph_bitmap = money_glyph_bitmap,
-    .line_height = 16, .base_line = 3,
+    .line_height = 18, .base_line = 3,
 };
+
+static void on_ai_source_click(lv_event_t *event)
+{
+    int index = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(event));
+    pc_monitor_select_ai_source(index == 1 ? "CLAUDE" : "CODEX");
+    refresh_menu_bottom();
+}
 
 static void build_menu_screen(void)
 {
@@ -663,26 +670,29 @@ static void build_menu_screen(void)
         lv_obj_set_style_text_align(s_home_detail[i], LV_TEXT_ALIGN_CENTER, 0);
     }
 
-    lv_obj_t *codex = home_panel(scr, 8, 144, 304, 45, cyan);
-    home_label(codex, LV_SYMBOL_EDIT " CODEX", 8, 4, 90, cyan);
-    s_codex_state = home_label(codex, "~\xC2\xA5--", 176, 4, 118, CLR_TEXT_DIM);
+    lv_obj_t *codex = home_panel(scr, 8, 144, 304, 50, cyan);
+    const char *sources[] = {"CODEX", "CLAUDE"};
+    for (int i = 0; i < 2; ++i) {
+        s_ai_tabs[i] = make_btn(codex, sources[i], on_ai_source_click, i);
+        lv_obj_set_pos(s_ai_tabs[i], 5 + i * 82, 2);
+        lv_obj_set_size(s_ai_tabs[i], 78, 23);
+        lv_obj_set_style_pad_all(s_ai_tabs[i], 0, 0);
+        lv_obj_set_style_radius(s_ai_tabs[i], 5, 0);
+    }
+    lv_obj_t *cost_title = home_label(codex, "TODAY CNY", 186, 5, 108, CLR_TEXT_DIM);
+    lv_obj_set_style_text_align(cost_title, LV_TEXT_ALIGN_RIGHT, 0);
+    s_codex_state = home_label(codex, "~\xC2\xA5--", 186, 28, 108, CLR_OK);
     lv_obj_set_style_text_font(s_codex_state, &s_money_font, 0);
     lv_obj_set_style_text_align(s_codex_state, LV_TEXT_ALIGN_RIGHT, 0);
-    s_codex_value = home_label(codex, "TODAY -- tokens", 8, 21, 206, CLR_TEXT);
-    s_codex_bar = lv_bar_create(codex);
-    lv_obj_set_pos(s_codex_bar, 220, 26);
-    lv_obj_set_size(s_codex_bar, 74, 7);
-    lv_bar_set_range(s_codex_bar, 0, 100);
-    lv_bar_set_value(s_codex_bar, 0, LV_ANIM_OFF);
-    lv_obj_set_style_bg_color(s_codex_bar, lv_color_hex(0x173342), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(s_codex_bar, cyan, LV_PART_INDICATOR);
+    s_codex_value = home_label(codex, "-- tokens", 8, 28, 174, CLR_TEXT);
+    lv_obj_set_style_text_font(s_codex_value, &lv_font_montserrat_16, 0);
 
     const char *categories[] = {LV_SYMBOL_PLAY "  GAME", LV_SYMBOL_SETTINGS "  SYSTEM", LV_SYMBOL_LIST "  OTHER"};
     lv_color_t colors_btn[] = {CLR_OK, cyan, lv_color_hex(0xFB923C)};
     for (int i = 0; i < 3; ++i) {
         lv_obj_t *btn = make_btn(scr, categories[i], on_menu_btn, 10 + i);
-        lv_obj_set_pos(btn, 8 + i * 103, 195);
-        lv_obj_set_size(btn, 98, 37);
+        lv_obj_set_pos(btn, 8 + i * 103, 200);
+        lv_obj_set_size(btn, 98, 32);
         lv_obj_set_style_radius(btn, 7, 0);
         lv_obj_set_style_bg_color(btn, CLR_PANEL, 0);
         lv_obj_set_style_border_color(btn, colors_btn[i], 0);
@@ -894,19 +904,23 @@ static void refresh_menu_bottom(void)
         label_set_text_if_changed(s_home_detail[i], buf);
     }
     bool valid = st.codex_link && st.codex_tokens >= 0 && today == st.codex_day;
-    int percent = 0;
+    int selected = strcmp(st.ai_source, "CLAUDE") == 0 ? 1 : 0;
+    for (int i = 0; i < 2; ++i) {
+        bool active = i == selected;
+        lv_obj_set_style_bg_color(s_ai_tabs[i], lv_color_hex(active ? 0x24D4EA : 0x07161E), 0);
+        lv_obj_set_style_border_color(s_ai_tabs[i], lv_color_hex(active ? 0x24D4EA : 0x334155), 0);
+        lv_obj_set_style_text_color(lv_obj_get_child(s_ai_tabs[i], 0),
+                                    active ? lv_color_hex(0x07161E) : CLR_TEXT_DIM, 0);
+    }
     if (valid) {
-        if (st.codex_goal > 0) {
-            snprintf(buf, sizeof(buf), "TODAY %.1fk / %.1fk", st.codex_tokens / 1000.0, st.codex_goal / 1000.0);
-            percent = st.codex_tokens >= st.codex_goal ? 100 : (int)((double)st.codex_tokens / st.codex_goal * 100.0);
-        } else snprintf(buf, sizeof(buf), "TODAY %.1fk tokens", st.codex_tokens / 1000.0);
-    } else snprintf(buf, sizeof(buf), "TODAY -- tokens");
+        snprintf(buf, sizeof(buf), "%.1fk tokens", st.codex_tokens / 1000.0);
+    } else snprintf(buf, sizeof(buf), "-- tokens");
     label_set_text_if_changed(s_codex_value, buf);
     if (valid && st.codex_cost_fen >= 0)
         snprintf(buf, sizeof(buf), "~\xC2\xA5%.2f", st.codex_cost_fen / 100.0);
     else snprintf(buf, sizeof(buf), "~\xC2\xA5--");
     label_set_text_if_changed(s_codex_state, buf);
-    lv_bar_set_value(s_codex_bar, percent, LV_ANIM_OFF);
+    lv_obj_set_style_text_color(s_codex_state, valid && st.codex_cost_fen >= 0 ? CLR_OK : CLR_TEXT_DIM, 0);
 }
 
 // ---------------- SYSINFO screen ----------------
@@ -3777,7 +3791,7 @@ static void do_set_screen(ui_screen_t scr)
     s_menu_loc = NULL;
     s_codex_value = NULL;
     s_codex_state = NULL;
-    s_codex_bar = NULL;
+    s_ai_tabs[0] = s_ai_tabs[1] = NULL;
     for (int i = 0; i < 3; ++i) {
         s_home_arc[i] = NULL;
         s_home_value[i] = NULL;

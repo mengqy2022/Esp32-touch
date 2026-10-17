@@ -1,7 +1,7 @@
 # ESP32 Touch Dashboard：Windows 软件手册
 
 `ESP32TouchDashboard.exe` 是设备的 PC 数据配套程序。它在电脑上采集
-CPU/GPU/RAM、本机 Codex 今日 Token 与人民币估算费用，并通过串口发送给设备。
+CPU/GPU/RAM、本机 Codex／Claude Code 今日 Token 与人民币估算费用，并通过串口发送给设备。
 `pc_monitor_host.py` 是其中的发送模块，同时会读取设备输出的日志。
 
 ## 安装与首次运行
@@ -54,6 +54,9 @@ HKCU\Software\Microsoft\Windows\CurrentVersion\Run
 | 恢复监控 | 清除暂停标记，必要时启动后台，等待并连接设备 |
 | 修改价格和汇率 | 用系统关联程序打开 `codex_prices.json`，当前是 JSON 编辑方式 |
 | 查看运行日志 | 打开 `host.log`，查看连接、数据和异常信息 |
+| COM 检查与设置 | 显示端口、自动识别 CH340、固定手动端口、释放监控后检查 FILE:PONG；保存后自动生效 |
+| CH340 驱动检查与安装 | 查询 Windows PnP 状态，区分缺少驱动代码 28／设备异常／未接入，提供官方下载与本地安装入口 |
+| 切换 AI 用量来源（备用） | 优先在设备主页点选 CODEX／CLAUDE；此入口暂停监控、向已连接设备发送一次切换指令，等待确认后恢复原暂停状态 |
 
 关闭控制窗口后，后台继续运行。当前没有托盘图标；选择一个操作后通常会结束
 当前控制对话框，需要再次从开始菜单打开才能操作其他项目。
@@ -77,18 +80,36 @@ HKCU\Software\Microsoft\Windows\CurrentVersion\Run
 价格文件修改会重新估算当天数据，当前没有按价格生效日期分段计价。
 默认模型、长短上下文单价和公式见 [Codex 统计与价格](CODEX_USAGE_CN.md)。
 
-个人 Token 目标在 `config.json` 的 `daily_goal`，0 表示不启用。
-`codex_refresh` 控制日志统计间隔，默认 5 秒。后台启动时读取此配置，修改后
-需完全结束后台并恢复；单纯暂停／恢复不会重新读取现有后台的配置。
-根目录 `start_dashboard.ps1 -CodexDailyGoal 1000000` 提供写入并恢复入口，
-对已运行后台同样需重启后才使用新目标。价格文件则无需重启。
+AI 每日目标及限额已删除，升级安装会移除旧 `daily_goal` 配置。
+`ai_source` 可为 `codex`／`claude`，记录电脑端上次选择；旧 `all` 设置迁移为 `codex`。
+设备当前来源保存在设备 NVS 中，电脑后台启动、数据刷新及重连不会覆盖它。
+`codex_refresh` 为刷新秒数，默认 5。
+后台约每两秒重新读取配置，设备配置变化时先停止旧采集线程再连接。
+根目录 `start_dashboard.ps1` 只恢复监控；显式 `-AiSource claude` 才选择已连接设备的来源。
+
+Claude Code 默认扫描 `CLAUDE_CONFIG_DIR` 或 `~/.claude/projects`。
+模型名称按日志精确匹配单价，未知模型不会套用其他模型价格。
+
+## COM 与 CH340
+
+COM 设置的手动模式固定所选端口，端口消失时等待，不自动切换其他设备。
+自动模式按 CH340 VID/PID 和已有身份匹配。连接检查暂时暂停监控，等待串口释放，
+发送 `FILE:PING` 并检查 `FILE:PONG`，随后恢复原暂停状态。此响应只证明协议可用，
+不构成独有设备身份握手；打开串口也可能受桥接器驱动影响引起设备复位。
+
+驱动检查可发现没有 COM 号的缺驱动 USB 设备；未接入设备时不推断驱动缺失。
+“自动下载并安装”使用 WCH 官方接口，检查 EXE 文件及有效 WCH/QinHeng 签名后，
+通过 Windows UAC 请求安装权限。WCH 页面校验或网络可能阻止自动下载，
+此时选择“打开 WCH 官方下载页面”，下载 `CH341SER.EXE` 后使用本地安装入口。
+程序本身按用户安装无需管理员权限，驱动安装需要；安装结果需刷新 PnP 状态确认。
 
 ## 本机文件与资源
 
 | 文件 | 用途 |
 | --- | --- |
 | `ESP32TouchDashboard.exe` | 已安装程序 |
-| `config.json` | USB 身份、刷新间隔、个人目标 |
+| `config.json` | USB 身份、自动／手动 COM、刷新间隔、AI 来源 |
+| `connection.json` | 后台暂停／采集状态，供连接检查协调串口释放 |
 | `codex_prices.json` | 模型单价与汇率 |
 | `host.log`、`host.log.1`～`.3` | 轮换日志，每个上限约 2 MB，总计约 8 MB |
 | `agent.pid`、`agent.lock` | 后台进程信息、单实例锁 |
@@ -120,7 +141,7 @@ HKCU\Software\Microsoft\Windows\CurrentVersion\Run
 3. 在任务管理器结束安装目录对应的 ESP32TouchDashboard 引导／工作进程。
    确认旧后台已结束。
 4. 运行新版 EXE，或在终端调用新版 `ESP32TouchDashboard.exe --install`。
-   已有配置和价格文件会保留；安装流程会启用自启并恢复监控。
+   保留设备设置、自定义价格和汇率，移除旧每日目标，迁移旧内置价格并备份；安装流程启用自启并恢复监控。
 5. 检查控制窗口自启状态和设备数据显示。
 
 已安装过程序时，直接双击下载的新 EXE可能只打开控制窗口；显式 `--install`
@@ -143,8 +164,8 @@ HKCU\Software\Microsoft\Windows\CurrentVersion\Run
 | --- | --- |
 | 重启后不显示电脑数据 | 登录后打开控制窗口，确认自启已启用、未暂停；检查任务管理器启动应用和 `host.log`。当前验证记录未包含真实重启测试。 |
 | COM 号存在但连不上 | 检查其他串口监视器、烧录工具或库存工具是否占用；关闭它们再恢复监控。 |
-| 多个 CH340 同时接入 | 先只接目标设备完成安装／识别，检查配置的身份；需要更改配置时先备份并完全重启后台。 |
-| 换 USB 插口后等不到目标 | 多候选场景可能与保存位置不符；仅接目标设备检查识别，必要时更新 `config.json`，后台需重启。 |
+| 多个 CH340 同时接入 | 在 COM 设置中手动选择目标设备并检查响应。 |
+| 换 USB 插口后等不到目标 | 在 COM 设置中刷新，重新选择端口或切回自动模式。 |
 | CPU 温度 `--` | WMI 温度提供者通常无法提供实际 CPU 核心温度；当前电脑即可能读不到，这是传感器限制。 |
 | GPU 数据 `--` | 当前主要支持 NVIDIA NVML，检查驱动；AMD／Intel 没有同等已实现路径。 |
 | Tokens NO DATA | 确认该用户的 Codex 日志目录、本地今日记录、后台与设备日期；阅读日志中的 CODEX 信息。 |

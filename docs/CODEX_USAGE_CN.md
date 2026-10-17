@@ -1,4 +1,4 @@
-# Codex 用量与人民币费用估算
+# Codex / Claude Code 用量与人民币费用估算
 
 该功能读取本机日志，提供桌面设备上的用量参考。它没有连接账单接口，
 不展示套餐剩余额度，也不代表实际扣款。
@@ -25,6 +25,21 @@
 有有效事件但今日没有新增用量时，可以显示 0。计数源是本地实现细节，
 日志格式变化可能需要调整程序。不同电脑、删除过的日志、服务器修正不在统计范围内。
 
+## Claude Code 与来源切换
+
+在设备主页点选 `CODEX` 或 `CLAUDE` 按钮，分别查看各自的 Token 和金额，设备会记住选择。
+电脑发送两套独立数据，刷新和重连不覆盖设备选择。EXE 控制窗口提供备用入口。
+Claude Code 从 `CLAUDE_CONFIG_DIR` 或 `~/.claude` 下
+`projects/**/*.jsonl` 读取 assistant 消息的 `message.usage`，包含子代理日志。
+按消息 ID 和请求 ID 去重，使用最新快照，避免同一回复的多段记录重复累计。
+半行留待下次读取；跨日重建。日志缺失、删除、格式变化仍会影响结果。
+
+Claude 今日总 Token 包含普通输入、缓存读取、缓存写入、输出。Anthropic 的
+`input_tokens` 不含缓存字段，读取时会将两类缓存补入输入总量，再使用下方统一公式。
+缺少模型单价时保留 Token，金额显示不可用。仅为配置中明确的模型名称计价。
+切换后 Token 和金额一起更新；所选来源不可读时显示 `--`，不借用另一个来源的数据。
+已删除 AI 每日目标、限额配置与进度条，词汇学习计划不受影响。
+
 ## 默认示例单价
 
 **以下是使用者提供并确认的配置示例，未独立核实为官方价格。**
@@ -33,13 +48,15 @@
 
 | 模型 | 档位 | 普通输入 | 缓存读取 | 缓存写入 | 输出 |
 | --- | --- | ---: | ---: | ---: | ---: |
-| gpt-6.1-sol | 短上下文 ≤272,000 | 2.00 | 0.10 | 2.50 | 10.00 |
-| gpt-6.1-sol | 长上下文 >272,000 | 4.00 | 0.20 | 5.00 | 15.00 |
-| gpt-6-astra | 短上下文 ≤272,000 | 10.00 | 1.00 | 12.50 | 50.00 |
-| gpt-6-astra | 长上下文 >272,000 | 20.00 | 2.00 | 25.00 | 75.00 |
+| gpt-6-astra | 短上下文 ≤272,000 | 2.00 | 0.20 | 2.50 | 10.00 |
+| gpt-6-astra | 长上下文 >272,000 | 4.00 | 0.40 | 5.00 | 15.00 |
+| gpt-6.1-sol | 短上下文 ≤272,000 | 0.40 | 0.02 | 0.50 | 2.00 |
+| gpt-6.1-sol | 长上下文 >272,000 | 0.80 | 0.04 | 1.00 | 3.00 |
+| claude-fable-5-1 | 统一档位 | 3.00 | 0.075 | 3.75 | 15.00 |
 
-当前用每次日志事件的输入增量是否超过 272,000 判断长档。日志事件可能汇总多个
-请求，也未必暴露真实计费上下文，因此这个分档是近似值。日志未提供缓存写入时
+Codex 优先读取事件的 `context_tokens`，缺少时使用 `last_token_usage.input_tokens`，
+再缺少才回退到输入增量。超过 272,000 为长档，恰好 272,000 为短档。
+日志未必暴露真实计费上下文，因此缺少显式上下文时分档是近似值。日志未提供缓存写入时
 按 0 处理，同样是基于日志可见字段的假设。
 
 ## 计算方法
@@ -58,8 +75,8 @@
 串口发送整数分，设备显示 `~¥` 和两位小数。
 
 例：gpt-6.1-sol 短档，输入 100,000，其中缓存读取 80,000、缓存写入 0，
-输出 10,000；美元估算为 `0.02×2 + 0.08×0.1 + 0.01×10 = 0.148`，
-乘 7.20 后为 1.0656 元，显示约 `~¥1.07`。
+输出 10,000；美元估算为 `0.02×0.4 + 0.08×0.02 + 0.01×2 = 0.0296`，
+乘 7.20 后为 0.21312 元，显示约 `~¥0.21`。
 
 当任何已消耗用量缺少模型价格／必要细分，或价格格式无效时，金额显示 `~¥--`，
 不会把可估算部分当成完整总额。Tokens 仍可正常显示。
@@ -69,7 +86,9 @@
 
 源码模板：[tools/codex_prices.json](../tools/codex_prices.json)。
 已安装程序使用 `%LOCALAPPDATA%/ESP32TouchDashboard/codex_prices.json`。
-首次安装复制模板，后续覆盖安装保留原配置；修改源码模板不会自动覆盖已安装文件。
+首次安装复制模板。升级时自动替换与旧内置 USD 单价完全一致的两组 GPT 配置，
+并加入缺失的 Claude 单价，备份为 `codex_prices.before-2026-10-17.json`；
+自定义单价、汇率和其他模型保留。CNY 自定义文件不注入 USD 单价，请自行补充。
 
 ```json
 {
@@ -79,16 +98,16 @@
   "models": {
     "gpt-6.1-sol": {
       "short": {
-        "input_per_million": 2,
-        "cached_input_per_million": 0.1,
-        "cache_write_input_per_million": 2.5,
-        "output_per_million": 10
+        "input_per_million": 0.4,
+        "cached_input_per_million": 0.02,
+        "cache_write_input_per_million": 0.5,
+        "output_per_million": 2
       },
       "long": {
-        "input_per_million": 4,
-        "cached_input_per_million": 0.2,
-        "cache_write_input_per_million": 5,
-        "output_per_million": 15
+        "input_per_million": 0.8,
+        "cached_input_per_million": 0.04,
+        "cache_write_input_per_million": 1,
+        "output_per_million": 3
       }
     }
   }
@@ -106,6 +125,6 @@
 python tools/pc_monitor_host.py --port COM5 --codex-prices tools/codex_prices.json
 ```
 
-个人目标参数为 `--codex-daily-goal`，它只影响进度条，不参与费用计算。
+终端默认保留设备选择并发送两套独立数据。显式 `--ai-source codex|claude` 仅在启动时选择一次，`--claude-home` 指定 Claude Code 目录。
 串口字段与兼容性见 [PROTOCOL.md](PROTOCOL.md)，安装操作见
 [Windows 软件手册](WINDOWS_APP_CN.md)。

@@ -2,14 +2,16 @@
   "currency": "USD",
   "usd_to_cny": 7.20,
   "source": "User supplied prices; fixed configurable exchange rate",
+  "version": "2026-10-17",
   "models": {
     "gpt-6.1-sol": {
-      "short": {"input_per_million": 2, "cached_input_per_million": 0.1, "cache_write_input_per_million": 2.5, "output_per_million": 10},
-      "long": {"input_per_million": 4, "cached_input_per_million": 0.2, "cache_write_input_per_million": 5, "output_per_million": 15}
+      "short": {"input_per_million": 0.4, "cached_input_per_million": 0.02, "cache_write_input_per_million": 0.5, "output_per_million": 2},
+      "long": {"input_per_million": 0.8, "cached_input_per_million": 0.04, "cache_write_input_per_million": 1, "output_per_million": 3}
     },
     "gpt-6-astra": {
-      "short": {"input_per_million": 10, "cached_input_per_million": 1, "cache_write_input_per_million": 12.5, "output_per_million": 50},
-      "long": {"input_per_million": 20, "cached_input_per_million": 2, "cache_write_input_per_million": 25, "output_per_million": 75}
-    }
+      "short": {"input_per_million": 2, "cached_input_per_million": 0.2, "cache_write_input_per_million": 2.5, "output_per_million": 10},
+      "long": {"input_per_million": 4, "cached_input_per_million": 0.4, "cache_write_input_per_million": 5, "output_per_million": 15}
+    },
+    "claude-fable-5-1": {"input_per_million": 3, "cached_input_per_million": 0.075, "cache_write_input_per_million": 3.75, "output_per_million": 15}
   }
 }

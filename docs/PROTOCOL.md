@@ -10,17 +10,25 @@ One ASCII line per command, terminated by `\n`, at 115200 baud. The existing
 | `PC:TZOFF\|minutes` | Persist timezone offset in minutes east of UTC. |
 | `PC:TIME\|unix_seconds` | Synchronize wall clock from USB. |
 | `PC:STAT\|cpu\|gpu\|cpu_C\|gpu_C\|mem\|used_MB\|total_MB` | Percent loads, temperatures, physical RAM. `-1` means unavailable; memory fields are optional for older senders. |
-| `PC:CODEX\|today_tokens\|daily_goal\|YYYYMMDD\|estimated_CNY_fen` | Local Codex daily token count, user-defined goal, host local calendar date and optional estimated cost in CNY cents. `-1` tokens/cost means unavailable, `0` goal means no goal. Counts/goal/cost use signed 64-bit integers; older packets without a cost field remain supported. |
+| `PC:USAGE\|source\|today_tokens\|0\|YYYYMMDD\|estimated_CNY_fen` | Update the independent `CODEX` or `CLAUDE` cache without changing the device selection. Counts/cost use signed 64-bit integers; `-1` means unavailable. The reserved slot is zero. |
+| `PC:AI\|source` | Select `CODEX` or `CLAUDE` once and persist the preference on the device. Calls the same function as the touch buttons. Normal telemetry does not send this command. |
+| `PC:AI?` | Query selected source. Response: `PC:AI_STATE\|source\|tokens\|YYYYMMDD\|cost_fen\|fresh`. The last flag reports a packet received within 90 seconds; UI also checks tokens and local date. |
+| `PC:CODEX\|today_tokens\|0\|YYYYMMDD\|estimated_CNY_fen` | Legacy packet updating the currently selected source. Older packets without cost remain supported; former daily-goal fields are parsed and ignored. |
 
-`PC:CODEX` is independent of `PC:STAT`. Codex packets never make old CPU/GPU
-samples appear online. PC data expires after 5 seconds; Codex data after
-90 seconds. The dashboard rejects Codex data for a different calendar day.
-The host sends Codex telemetry every sampling interval, recomputes usage
+AI usage is independent of `PC:STAT`. Usage packets never make old CPU/GPU
+samples appear online. PC data expires after 5 seconds; each provider's usage expires
+independently after 90 seconds. The dashboard rejects usage for a different calendar day.
+The host sends both providers' separate caches every sampling interval, recomputes usage
 every 5 seconds by default, and sends TIME every 15 seconds. After reconnect it
-resends NAME, TZOFF and TIME.
+resends NAME, TZOFF and TIME. It preserves the device's choice across refresh and
+reconnect. An explicit standalone `--ai-source` sends a one-time selection at startup.
+
+The paired host and firmware must both support `PC:USAGE` for touch selection.
+Older hosts may still overwrite selection with their `PC:AI` commands; update the
+companion together with the firmware.
 
 Only aggregate token counts are transferred. No prompts, credentials or
-account identifiers are included. `daily_goal` is not an official plan quota.
+account identifiers are included. The former daily-goal slot is always zero.
 The cost uses locally configured rates and exchange rate, not billed charges.
 
 ## Existing FILE commands

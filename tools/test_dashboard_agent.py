@@ -25,6 +25,16 @@ class DiscoveryTests(unittest.TestCase):
         ports=[self.port(serial_number='wrong'),self.port('COM8',serial_number='target')]
         self.assertEqual(matching_port(ports,{'vid':0x1A86,'pid':0x7523,'serial_number':'target'}),'COM8')
 
+    def test_manual_port_never_falls_back_to_another_bridge(self):
+        config = dict(mode='manual', device='COM8', vid=0x1A86, pid=0x7523)
+        self.assertIsNone(matching_port([self.port('COM7')], config))
+        self.assertEqual(matching_port([self.port('COM8')], config), 'COM8')
+        self.assertIsNone(matching_port([self.port('COM8', vid=0x10C4)], config))
+
+    def test_manual_serial_identity_cannot_be_replaced(self):
+        config = dict(mode='manual', device='COM8', vid=0x1A86, pid=0x7523, serial_number='target')
+        self.assertIsNone(matching_port([self.port('COM8', serial_number='other')], config))
+
 
 if __name__=='__main__':
     unittest.main()

@@ -18,7 +18,7 @@ jobs:
           architecture: x64
       - name: Package standalone EXE
         shell: pwsh
-        run: ./build_exe.ps1
+        run: ./build_exe.ps1 -WorkRoot "$env:RUNNER_TEMP/dashboard-build" -PublishToRepository
       - name: Write SHA-256 checksum
         shell: pwsh
         run: |

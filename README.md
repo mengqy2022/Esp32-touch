@@ -1,12 +1,12 @@
 # ESP32 Touch Dashboard & Toolbox
 
-[![ESP-IDF build](https://github.com/mengqy2022/Esp32-s3-touch/actions/workflows/build.yml/badge.svg)](https://github.com/mengqy2022/Esp32-s3-touch/actions/workflows/build.yml)
-[![Host tests](https://github.com/mengqy2022/Esp32-s3-touch/actions/workflows/host-tests.yml/badge.svg)](https://github.com/mengqy2022/Esp32-s3-touch/actions/workflows/host-tests.yml)
+[![ESP-IDF build](https://github.com/mengqy2022/Esp32-touch/actions/workflows/build.yml/badge.svg)](https://github.com/mengqy2022/Esp32-touch/actions/workflows/build.yml)
+[![Host tests](https://github.com/mengqy2022/Esp32-touch/actions/workflows/host-tests.yml/badge.svg)](https://github.com/mengqy2022/Esp32-touch/actions/workflows/host-tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [中文说明](README_CN.md) · [Documentation](docs/README.md) · [Changelog](CHANGELOG.md)
 
-A 320×240 touchscreen dashboard with live PC monitoring, local Codex token
+A 320×240 touchscreen dashboard with live PC monitoring, local Codex / Claude Code token
 statistics and estimated CNY costs, plus games, system utilities, inventory
 management and an offline vocabulary lab. A small Windows companion application
 installs per user, starts after login and waits for the USB device automatically.
@@ -20,11 +20,11 @@ target, pin map and display orientation for this board. Other boards need portin
 | Area | Current behavior |
 | --- | --- |
 | Home | Date, weekday, Wi-Fi status, clock; CPU/GPU/RAM rings, temperatures and RAM usage. Home stays visible when idle. |
-| CODEX | Today's local input + output tokens; optional personal daily goal; estimated cost such as `~¥12.34`. Usage refreshes about every 5 seconds. |
+| AI usage | Tap CODEX / CLAUDE on the device to switch independent daily usage; selection survives reboot. Daily tokens on the left, estimated CNY cost on the right. EXE selection remains a fallback. No daily goal. Refreshes about every 5 seconds. |
 | GAME | Sudoku, 2048 and Flappy. |
 | SYSTEM | SD check, system info, Wi-Fi, confirmed touch calibration and PC details. |
 | OTHER | SD-backed inventory/BOM and Vocab Lab with local wordbooks, study plans, spaced review and touchscreen dictation. |
-| Windows companion | Standalone EXE, login startup controls, USB port detection, pause/resume, price configuration and rotating logs. No Python installation needed for end users. |
+| Windows companion | Standalone EXE, COM selection and connection check, CH340 driver diagnostics/installation, AI source selection, login startup, pause/resume, price configuration and rotating logs. |
 
 PC telemetry requires the companion to run. Games and local utilities remain
 usable independently. GPU data depends on a supported NVIDIA driver; CPU
@@ -38,7 +38,7 @@ device; no prompts or credentials are transmitted.
 
 ## Windows quick start
 
-1. [Download ESP32TouchDashboard.exe](https://github.com/mengqy2022/Esp32-s3-touch/raw/refs/heads/main/dist/ESP32TouchDashboard.exe)
+1. [Download ESP32TouchDashboard.exe](https://github.com/mengqy2022/Esp32-touch/raw/refs/heads/main/dist/ESP32TouchDashboard.exe)
    or build it using the instructions below. The published Windows x64 EXE is
    also available in [dist/](dist/README.md), with a SHA-256 checksum.
 2. Connect the device. Install its USB serial driver if Windows does not expose a
@@ -93,7 +93,7 @@ docs/                  Functionality, app guide, architecture, protocol, roadmap
 sdcard_template/       Public starter inventory/BOM and vocabulary examples
 .github/workflows/     Firmware CI, host tests, manual Windows packaging
 build_exe.ps1          Build the standalone Windows EXE
-start_dashboard.ps1    Install if needed, set daily goal and resume
+start_dashboard.ps1    Install if needed, select AI source and resume
 stop_dashboard.ps1     Pause monitoring and release the serial port
 ```
 

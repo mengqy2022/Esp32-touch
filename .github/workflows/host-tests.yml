@@ -31,3 +31,6 @@ jobs:
       # Hardware and native dialog checks are deliberately manual.
       - run: python -m unittest discover -s tools -p test_codex_usage.py -v
       - run: python -m unittest discover -s tools -p test_dashboard_agent.py -v
+      - run: python -m unittest discover -s tools -p test_ai_usage.py -v
+      - run: python -m unittest discover -s tools -p test_device_settings.py -v
+      - run: python -m unittest discover -s tools -p test_desktop_settings.py -v

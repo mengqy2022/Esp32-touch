@@ -56,6 +56,8 @@ The yen sign uses a tiny dedicated glyph rather than a large additional font.
 | `tools/dashboard_agent.py` | Single-instance file lock, device polling/matching, telemetry worker supervision, pause marker, rotating logs. |
 | `tools/pc_monitor_host.py` | In-process worker; samples OS providers, synchronizes time, sends PC packets, reads device logs. Also runnable directly in a terminal. |
 | `tools/codex_usage.py` | Incremental offsets, counter deltas, daily/model aggregation, pricing and packet formatting. |
+| `tools/ai_usage.py` | Claude Code cache-aware usage, duplicate assistant-message snapshots, independent Codex/Claude selection. |
+| `tools/device_settings.py` | Validated settings, PnP diagnostics including missing-driver devices, signed vendor installer/UAC. |
 
 The background supervisor runs its telemetry worker in a Python thread, avoiding a
 second Python host subprocess. PyInstaller onefile still has bootloader/worker OS
@@ -65,7 +67,8 @@ The agent polls ports approximately every 2 seconds. It prefers configured ident
 details and waits if several candidates cannot be resolved. Matching CH340 hardware
 is not proof of dashboard firmware; capability handshake is future work.
 
-Config is read at agent startup; price JSON is read during each usage recomputation.
+Config is reloaded every polling cycle; changing device/source safely stops and
+joins the old worker before starting the new worker. Price JSON is read during each usage recomputation.
 There is no persistent database for usage: offsets and counters live in memory,
 and a restart reconstructs today's counts from retained logs. Directory enumeration
 still occurs on every scan, even though file contents are read incrementally.
@@ -73,7 +76,7 @@ still occurs on every scan, even though file contents are read incrementally.
 ## Privacy and boundaries
 
 The firmware receives host name, aggregate loads, temperatures, RAM, time/date,
-token count, personal goal and estimated cost. It receives no conversation content
+token count, source name and estimated cost. It receives no conversation content
 or account credentials. The reader accesses log bytes locally but decodes only
 model/usage records. Runtime log reports may contain local paths or usage figures
 and should be reviewed before sharing.
