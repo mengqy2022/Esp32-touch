@@ -21,11 +21,35 @@ from dashboard_agent import run_agent, matching_port
 from device_settings import (load_config, save_config, selected_device, query_ch340,
                              driver_summary, install_signed_driver, WCH_PAGE)
 from ai_usage import SOURCES
+from pc_screen import Window
 
 APP_NAME = 'ESP32TouchDashboard'
 RUN_KEY = r'Software\Microsoft\Windows\CurrentVersion\Run'
 APPROVED_KEY = r'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
-APP_VERSION = '2026.10.17.2'
+APP_VERSION = '2026.10.18.1'
+
+
+def choose_screen_window(root):
+    windows = Window()
+    while True:
+        config = load_config(root / 'config.json')
+        targets = windows.list()
+        current = (config.get('screen_window') or {}).get('title', '未选择')
+        selected = native_command_dialog('PC SCREEN：窗口与触摸控制',
+            '当前窗口：' + current + '\n选择后，在设备 SYSTEM → PC SCREEN 查看并触摸控制。'
+            '\n只控制所选窗口；关闭窗口后需要重新选择。\n最小化采集与后台操作取决于软件支持；黑屏时请还原窗口。',
+            [(501, '停止窗口共享与控制'), (502, '刷新窗口列表')] +
+            [(600 + i, target['title'][:100] + f"\nPID {target['pid']}") for i, target in enumerate(targets)], root)
+        if selected == 502:
+            continue
+        if selected == 501:
+            config.pop('screen_window', None)
+        elif 600 <= selected < 600 + len(targets):
+            config['screen_window'] = windows.select(targets[selected - 600])
+        else:
+            return
+        save_config(root / 'config.json', config)
+        return
 
 
 def resource_root():
@@ -223,6 +247,12 @@ def driver_dialog(root):
 
 
 def install_root():
+    # A portable runtime location can move logs/config off a full system disk.
+    configured = os.environ.get('ESP32_DASHBOARD_HOME')
+    if configured:
+        return Path(configured).resolve()
+    if getattr(sys, 'frozen', False) and (Path(sys.executable).parent / 'config.json').is_file():
+        return Path(sys.executable).parent
     return Path(os.environ['LOCALAPPDATA']) / APP_NAME
 
 
@@ -284,7 +314,8 @@ def control_dialog(root):
                (106, '查看运行日志\n查看设备连接和用量更新记录'),
                (107, 'COM 检查与设置\n自动识别、选择端口、测试连接'),
                (108, 'CH340 驱动检查与安装\n检测缺失驱动，从官方来源安装'),
-               (109, '切换 AI 用量来源（备用）\n优先在设备主页点选 CODEX / CLAUDE')]
+               (109, '切换 AI 用量来源（备用）\n优先在设备主页点选 CODEX / CLAUDE'),
+               (110, 'PC SCREEN：选择窗口与触摸控制\n在设备上查看、点击、拖动和滚动所选窗口')]
     try:
         selected = native_command_dialog(title, info, buttons, root)
     except (OSError, AttributeError):
@@ -312,6 +343,8 @@ def control_dialog(root):
         driver_dialog(root)
     elif selected == 109:
         choose_ai_source(root)
+    elif selected == 110:
+        choose_screen_window(root)
 
 
 def native_command_dialog(title, info, buttons, root):

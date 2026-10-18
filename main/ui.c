@@ -5,6 +5,7 @@
 #include "lv_port.h"
 #include "net_utils.h"
 #include "pc_monitor.h"
+#include "pc_screen.h"
 #include "sd_monitor.h"
 #include "sudoku.h"
 #include "game2048.h"
@@ -499,6 +500,7 @@ static void on_menu_btn(lv_event_t *e)
         case 10: lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_GAME_MENU); break;
         case 11: lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_SYSTEM_MENU); break;
         case 12: lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_OTHER_MENU); break;
+        case 13: lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_PC_SCREEN); break;
         default: break;
     }
 }
@@ -714,11 +716,11 @@ static void build_category_screen(void)
     static const struct { const char *label; int16_t id; } games[] = {
         {"SUDOKU", 4}, {"2048", 7}, {"FLAPPY", 8}
     }, systems[] = {
-        {"SD CHECK", 0}, {"SYSTEM INFO", 1}, {"WIFI", 2}, {"CALIBRATE", 3}, {"PC DETAILS", 9}
+        {"SD CHECK", 0}, {"SYSTEM INFO", 1}, {"WIFI", 2}, {"CALIBRATE", 3}, {"PC DETAILS", 9}, {"PC SCREEN", 13}
     }, others[] = {
         {"INVENTORY", 5}, {"VOCAB LAB", 6}
     };
-    int n = game ? 3 : system ? 5 : 2;
+    int n = game ? 3 : system ? 6 : 2;
     lv_color_t accent = game ? CLR_OK : system ? lv_color_hex(0x24D4EA) : lv_color_hex(0xFB923C);
     for (int i = 0; i < n; ++i) {
         const char *label = game ? games[i].label : system ? systems[i].label : others[i].label;
@@ -3689,6 +3691,92 @@ static void refresh_plan_labels(void)
     }
 }
 
+// ---------------- Selected PC window ----------------
+static lv_obj_t *s_screen_image, *s_screen_status;
+static lv_img_dsc_t s_screen_descriptor;
+static int s_touch_x, s_touch_y;
+static bool s_touch_started;
+
+static void on_pc_touch(lv_event_t *event)
+{
+    lv_point_t point;
+    lv_indev_t *input = lv_indev_get_act();
+    if (!input) return;
+    lv_indev_get_point(input, &point);
+    int x = point.x / 2, y = (point.y - 40) / 2;
+    lv_event_code_t code = lv_event_get_code(event);
+    if (code == LV_EVENT_PRESSED) {
+        s_touch_x = x; s_touch_y = y; s_touch_started = true;
+    } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+        if (s_touch_started) {
+            x = x < 0 ? 0 : x >= PC_SCREEN_W ? PC_SCREEN_W - 1 : x;
+            y = y < 0 ? 0 : y >= PC_SCREEN_H ? PC_SCREEN_H - 1 : y;
+            pc_screen_gesture(s_touch_x, s_touch_y, x, y, 0);
+        }
+        s_touch_started = false;
+    }
+}
+
+static void on_pc_scroll(lv_event_t *event)
+{
+    if (!click_ok()) return;
+    int wheel = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(event));
+    pc_screen_gesture(80, 44, 80, 44, wheel);
+}
+
+static void refresh_pc_screen(void)
+{
+    char status[64] = "";
+    if (pc_screen_refresh(status, sizeof(status)) && s_screen_image) {
+        lv_img_cache_invalidate_src(&s_screen_descriptor);
+        lv_obj_invalidate(s_screen_image);
+    }
+    label_set_text_if_changed(s_screen_status, status);
+}
+
+static void build_pc_screen(void)
+{
+    lv_obj_t *scr = lv_scr_act();
+    lv_obj_clean(scr);
+    style_screen(scr);
+    make_title(scr, "PC SCREEN");
+    make_back_btn(scr);
+    s_screen_image = NULL;
+    s_touch_started = false;
+    lv_color_t *pixels = pc_screen_open();
+    if (pixels) {
+        memset(&s_screen_descriptor, 0, sizeof(s_screen_descriptor));
+        s_screen_descriptor.header.cf = LV_IMG_CF_TRUE_COLOR;
+        s_screen_descriptor.header.w = PC_SCREEN_W;
+        s_screen_descriptor.header.h = PC_SCREEN_H;
+        s_screen_descriptor.data_size = PC_SCREEN_W * PC_SCREEN_H * sizeof(lv_color_t);
+        s_screen_descriptor.data = (uint8_t *)pixels;
+        s_screen_image = lv_img_create(scr);
+        lv_img_set_src(s_screen_image, &s_screen_descriptor);
+        lv_img_set_pivot(s_screen_image, 0, 0);
+        lv_img_set_zoom(s_screen_image, 512);
+        lv_img_set_antialias(s_screen_image, false);
+        lv_obj_set_pos(s_screen_image, 0, 40);
+        // Use a full-sized transparent target: image zoom does not expand its hitbox.
+        lv_obj_t *touch = lv_obj_create(scr);
+        lv_obj_remove_style_all(touch);
+        lv_obj_set_pos(touch, 0, 40);
+        lv_obj_set_size(touch, 320, 176);
+        lv_obj_clear_flag(touch, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_event_cb(touch, on_pc_touch, LV_EVENT_ALL, NULL);
+    }
+    s_screen_status = make_label(scr, "", 3, 220, CLR_TEXT_DIM);
+    lv_obj_set_width(s_screen_status, 224);
+    lv_obj_set_style_text_font(s_screen_status, &lv_font_montserrat_16, 0);
+    lv_label_set_long_mode(s_screen_status, LV_LABEL_LONG_DOT);
+    for (int i = 0; i < 2; ++i) {
+        lv_obj_t *btn = make_btn(scr, i ? "DN" : "UP", on_pc_scroll, i ? -1 : 1);
+        lv_obj_set_pos(btn, 230 + i * 45, 217);
+        lv_obj_set_size(btn, 42, 23);
+    }
+    refresh_pc_screen();
+}
+
 // ---------------- public API ----------------
 // All public entry points are thread-safe: they post a command to the LVGL
 // task queue. Actual LVGL work runs in ui_process_cmd() on the LVGL thread.
@@ -3707,6 +3795,7 @@ static void do_draw_all(void)
         case SCREEN_2048: build_2048_screen(); break;
         case SCREEN_FLAPPY: build_flappy_screen(); break;
         case SCREEN_PCMON: build_pcmon_screen(); break;
+        case SCREEN_PC_SCREEN: build_pc_screen(); break;
         case SCREEN_INVENTORY: build_inventory_screen(); break;
         case SCREEN_VOCAB: build_vocab_screen(); break;
         case SCREEN_VOCAB_BOOKS: build_vocab_books_screen(); break;
@@ -3734,6 +3823,12 @@ static void do_update_status(void)
 
 static void do_set_screen(ui_screen_t scr)
 {
+    if (s_screen == SCREEN_PC_SCREEN) {
+        lv_obj_clean(lv_scr_act());
+        lv_img_cache_invalidate_src(&s_screen_descriptor);
+        pc_screen_close();
+        s_screen_image = s_screen_status = NULL;
+    }
     if (s_flappy_timer) {
         lv_timer_del(s_flappy_timer);
         s_flappy_timer = NULL;
@@ -3914,6 +4009,9 @@ static void ui_timer_cb(lv_timer_t *t)
             break;
         case SCREEN_PCMON:
             refresh_pcmon_screen();
+            break;
+        case SCREEN_PC_SCREEN:
+            refresh_pc_screen();
             break;
         case SCREEN_VOCAB:
             refresh_vocab_dashboard();

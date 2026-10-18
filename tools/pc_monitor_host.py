@@ -32,6 +32,7 @@ Notes:
 
 import argparse
 import ctypes
+import json
 import datetime
 import platform
 import socket
@@ -40,6 +41,7 @@ import sys
 import time
 
 from ai_usage import AIUsage, SOURCES, ai_packet
+from pc_screen import Mirror
 
 IS_WINDOWS = platform.system() == "Windows"
 
@@ -334,7 +336,7 @@ def connect(port, baud=BAUD, stop_event=None):
         sys.exit(1)
     while stop_event is None or not stop_event.is_set():
         try:
-            ser = serial.Serial(port, baud, timeout=0.2, write_timeout=2)
+            ser = serial.Serial(port, baud, timeout=0.2, write_timeout=5)
             return ser
         except (serial.SerialException, OSError) as exc:
             print(f"[{port}] 打开失败: {exc} — 3 秒后重试 (Ctrl+C 退出)")
@@ -360,6 +362,7 @@ def main(argv=None, stop_event=None):
     ap.add_argument('--ai-source', choices=('codex', 'claude'),
                     help='可选：启动时选择设备来源一次；默认保留设备选择，两套用量均独立发送')
     ap.add_argument('--claude-home', help='Claude Code 配置目录，默认 CLAUDE_CONFIG_DIR 或 ~/.claude')
+    ap.add_argument('--screen-window', type=json.loads, help='Selected Win32 window identity (JSON)')
     ap.add_argument("--duration", type=float, default=0,
                     help="运行指定秒数后退出，0 表示持续运行")
     args = ap.parse_args(argv)
@@ -394,6 +397,7 @@ def main(argv=None, stop_event=None):
     first = True
     select_source = args.ai_source
     started = time.monotonic()
+    mirror = Mirror(args.screen_window)
 
     while stop_event is None or not stop_event.is_set():
         if args.duration and time.monotonic() - started >= args.duration:
@@ -434,18 +438,7 @@ def main(argv=None, stop_event=None):
                 ser.write(line.encode("ascii") + b"\n")
             select_source = None
             first = False
-            # Drain device log output (ESP_LOG / FILE: lines) so the host-side RX
-            # buffer never fills up. Pass it through as "DEV| ..." so both
-            # directions of the link stay visible on this console.
-            try:
-                if ser.in_waiting:
-                    data = ser.read(ser.in_waiting)
-                    for raw in data.decode("utf-8", "replace").splitlines():
-                        line = raw.strip()
-                        if line:
-                            print("DEV| " + line, flush=True)
-            except Exception:
-                pass
+            mirror.tick(ser, stop_event)
             tags = [f"CPU {cpu:3d}%" if cpu >= 0 else "CPU  n/a",
                     f"GPU {gpu_load:3d}%" if gpu_load >= 0 else "GPU   --",
                     f"{cpu_temp:2d}C" if cpu_temp >= 0 else " --C ",
@@ -465,6 +458,7 @@ def main(argv=None, stop_event=None):
             if ser is None:
                 break
             first = True
+            mirror = Mirror(args.screen_window)
             continue
         except KeyboardInterrupt:
             break

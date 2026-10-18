@@ -109,6 +109,8 @@ def run_agent(config_path, quit_event=None):
             if port and worker is None:
                 options = ['--port', port, '--codex-refresh', str(config.get('codex_refresh', 5)),
                            '--codex-prices', str(runtime / 'codex_prices.json')]
+                if config.get('screen_window'):
+                    options += ['--screen-window', json.dumps(config['screen_window'])]
                 stop_worker = threading.Event()
                 worker = threading.Thread(target=host_main, args=(options, stop_worker), daemon=True)
                 worker.start()

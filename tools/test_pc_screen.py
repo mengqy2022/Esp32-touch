@@ -1,0 +1,89 @@
+import struct
+import unittest
+from unittest.mock import Mock
+
+from pc_screen import WIDTH, HEIGHT, Mirror, checksum, encode_frame, map_point, viewport
+
+
+class Serial:
+    def __init__(self):
+        self.incoming = b''
+        self.written = []
+    @property
+    def in_waiting(self): return len(self.incoming)
+    def read(self, count):
+        result, self.incoming = self.incoming[:count], self.incoming[count:]
+        return result
+    def write(self, data): self.written.append(data)
+
+
+class ScreenTests(unittest.TestCase):
+    def test_rle_roundtrip_and_maximum_length(self):
+        for data in (bytes(WIDTH * HEIGHT * 4), bytes([0, 0, 255, 0, 255, 0, 0, 0]) * (WIDTH * HEIGHT // 2)):
+            encoded = encode_frame(data)
+            decoded = b''.join(bytes([value]) * count for count, value in zip(encoded[::2], encoded[1::2]))
+            self.assertEqual(len(decoded), WIDTH * HEIGHT)
+            self.assertLessEqual(len(encoded), WIDTH * HEIGHT * 2)
+            self.assertTrue(all(encoded[::2]))
+        self.assertEqual(checksum(b'hello'), 0x4f9f2cab)
+        with self.assertRaises(ValueError): encode_frame(b'bad')
+
+    def test_letterbox_mapping_and_boundaries(self):
+        self.assertEqual(viewport(320, 176), (0, 0, 160, 88))
+        self.assertEqual(map_point(159, 87, (320, 176)), (318, 174))
+        self.assertEqual(viewport(100, 100), (36, 0, 88, 88))
+        with self.assertRaises(ValueError): map_point(35, 44, (100, 100))
+        with self.assertRaises(ValueError): map_point(160, 0, (320, 176))
+        for size in ((0, 100), (100, -1), (20000, 100)):
+            with self.assertRaises(ValueError): viewport(*size)
+
+    def test_partial_lines_and_input_requires_current_frame(self):
+        import time
+        window = Mock()
+        mirror = Mirror(dict(hwnd=1), window)
+        ser = Serial()
+        ser.incoming = b'SCREEN:STA'
+        mirror.read(ser)
+        self.assertEqual(mirror.session, 0)
+        ser.incoming = b'TE|21|0\nSCREEN:INPUT|21|1|10|10|20|20|0\n'
+        mirror.read(ser)
+        window.gesture.assert_not_called()
+        self.assertEqual(mirror.session, 21)
+        mirror.shown = 21, 1, (320, 176), time.monotonic()
+        ser.incoming = b'SCREEN:INPUT|21|1|10|10|20|20|0\n'
+        mirror.read(ser)
+        window.gesture.assert_called_once_with(mirror.target, (320, 176), 10, 10, 20, 20, 0)
+        window.reset_mock()
+        for data in (b'SCREEN:INPUT|22|1|10|10|20|20|0\n', b'SCREEN:INPUT|21|2|10|10|20|20|0\n',
+                     b'SCREEN:INPUT|21|1|10|10|20|20|99\n', b'SCREEN:INPUT|x\n'):
+            ser.incoming = data
+            mirror.read(ser)
+        window.gesture.assert_not_called()
+        ser.incoming = b'SCREEN:STATE|0\n'
+        mirror.read(ser)
+        self.assertIsNone(mirror.shown)
+
+    def test_no_payload_without_ready(self):
+        window = Mock()
+        window.capture.return_value = (b'\xff\x00', (320, 176))
+        mirror = Mirror(dict(hwnd=1), window)
+        mirror.session = 21
+        ser = Serial()
+        mirror.wait = Mock(return_value=False)
+        mirror.tick(ser)
+        self.assertEqual(len(ser.written), 2)
+        self.assertTrue(ser.written[1].startswith(b'SCREEN:FRAME|21|1|2|'))
+
+    def test_successful_handshake_retains_mapping(self):
+        window = Mock()
+        window.capture.return_value = (b'\xff\x00', (320, 176))
+        mirror = Mirror(dict(hwnd=1), window)
+        mirror.session = 21
+        mirror.wait = Mock(return_value=True)
+        ser = Serial()
+        mirror.tick(ser)
+        self.assertEqual(ser.written[-1], b'\xff\x00')
+        self.assertEqual(mirror.shown[:3], (21, 1, (320, 176)))
+
+
+if __name__ == '__main__': unittest.main()

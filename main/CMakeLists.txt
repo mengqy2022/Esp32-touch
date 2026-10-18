@@ -16,6 +16,7 @@ idf_component_register(
         "inventory.c"
         "file_xfer.c"
         "pc_monitor.c"
+        "pc_screen.c"
         "vocabulary.c"
         "font_cn16.c"
     INCLUDE_DIRS "."

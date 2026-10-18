@@ -1,5 +1,6 @@
 #include "file_xfer.h"
 #include "pc_monitor.h"
+#include "pc_screen.h"
 
 #include <dirent.h>
 #include <stdarg.h>
@@ -229,6 +230,8 @@ static void xfer_task(void *arg)
                 } else {
                     send_line("FILE:ERR|unknown command");
                 }
+            } else if (strncmp(line, "SCREEN:", 7) == 0) {
+                pc_screen_handle_line(line + 7);
             } else if (strncmp(line, "PC:", 3) == 0) {
                 // PC Monitor telemetry (time sync + CPU/GPU/MEM feed).
                 pc_monitor_handle_line(line + 3);
@@ -240,6 +243,7 @@ static void xfer_task(void *arg)
 
 esp_err_t file_xfer_start(void)
 {
+    pc_screen_init();
     // The ESP-IDF console VFS provides register-level access only (that is why
     // printf()/ESP_LOG output works), but uart_read_bytes()/uart_write_bytes()
     // require the interrupt-driven UART driver object, which is created by

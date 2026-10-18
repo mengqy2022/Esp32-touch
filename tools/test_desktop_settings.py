@@ -12,6 +12,18 @@ if sys.platform == 'win32':
 
 @unittest.skipUnless(sys.platform == 'win32', 'Windows control application')
 class DesktopSettingsTests(unittest.TestCase):
+    def test_portable_runtime_uses_existing_config_beside_executable(self):
+        from desktop_dashboard import install_root
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'config.json').write_text('{}')
+            with patch.dict(os.environ, {'ESP32_DASHBOARD_HOME': ''}), \
+                 patch('sys.frozen', True, create=True), patch('sys.executable', str(root / 'ESP32TouchDashboard.exe')):
+                self.assertEqual(install_root(), root)
+            with patch.dict(os.environ, {'ESP32_DASHBOARD_HOME': str(root)}):
+                self.assertEqual(install_root(), root.resolve())
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

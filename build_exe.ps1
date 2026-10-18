@@ -1,6 +1,7 @@
 param(
     [string]$PythonPath = (Get-Command python -ErrorAction Stop).Source,
     [string]$WorkRoot = 'F:\ESP32TouchDashboard-work\2026-10-17',
+    [string]$RuntimeTemp = '',
     [switch]$PublishToRepository
 )
 $ErrorActionPreference = 'Stop'
@@ -25,7 +26,11 @@ if (-not (Test-Path -LiteralPath $dashboardPython)) {
 }
 & $dashboardPython -m pip install -r tools/requirements-build.txt
 if ($LASTEXITCODE -ne 0) { throw 'Packaging dependency installation failed.' }
-& $dashboardPython -m PyInstaller --noconfirm --clean --onefile --noconsole `
+$dashboardRuntimeOptions = @()
+if ($RuntimeTemp) {
+    $dashboardRuntimeOptions = @('--runtime-tmpdir', $RuntimeTemp)
+}
+& $dashboardPython -m PyInstaller --noconfirm --clean --onefile --noconsole @dashboardRuntimeOptions `
   --name ESP32TouchDashboard --add-data "$PSScriptRoot/tools/codex_prices.json;." `
   --paths tools --distpath $dashboardOutput --workpath (Join-Path $dashboardBuild 'packaging') `
   --specpath $dashboardBuild tools/desktop_dashboard.py

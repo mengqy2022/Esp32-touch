@@ -31,6 +31,39 @@ Only aggregate token counts are transferred. No prompts, credentials or
 account identifiers are included. The former daily-goal slot is always zero.
 The cost uses locally configured rates and exchange rate, not billed charges.
 
+## Selected PC window (SCREEN)
+
+The dashboard's existing UART owner also sends 160×88 RGB332 frames. LVGL scales
+the image to 320×176, with aspect-preserving letterboxing supplied by the host.
+No SD writes, separate serial process, JPEG dependency or baud change is used.
+
+| Command | Response / exchange |
+| --- | --- |
+| `SCREEN:?` | `SCREEN:STATE\|session\|displayed_frame`; session zero means the page is closed. |
+| `SCREEN:OPEN`, `SCREEN:CLOSE` | Queue navigation to PC SCREEN / SYSTEM on the LVGL thread. |
+| `SCREEN:FRAME\|session\|frame\|length\|fnv1a32` | Wait for `SCREEN:READY`, send exactly length binary bytes, then wait for `SCREEN:OK` / `SCREEN:ERR\|reason`. |
+| `SCREEN:STATUS\|text` | Show up to 63 ASCII characters and disable input until another frame arrives. |
+
+Frames contain `(count, RGB332_pixel)` byte pairs. Count must be 1–255, decoded
+length exactly 14,080 pixels; encoded length must be even and 2–28,160 bytes.
+FNV-1a uses offset 2166136261, multiplier 16777619, unsigned 32-bit wrapping.
+The receiver drains a rejected payload before answering; raw receive has a six
+second total deadline. No other host writes may interleave with a binary frame.
+OK confirms validation; STATE reports its frame number only after LVGL consumes
+the pending frame. The UART task never mutates the displayed color buffer.
+
+The device sends `SCREEN:INPUT|session|frame|x1|y1|x2|y2|wheel` on release or scroll.
+Coordinates use the 160×88 image; wheel is -1, 0 or +1. The host accepts input
+only for its latest acknowledged session/frame, younger than eight seconds,
+inside the letterbox viewport, with unchanged client dimensions. Selection is
+bound to HWND, PID and a random window property which disappears when destroyed.
+No automatic selection of another window is allowed. Pointer messages are sent
+to the selected application's child control; the desktop cursor is not moved.
+
+At 115200 baud, the worst-case frame alone takes about 2.45 seconds on the wire.
+Flat application UI compresses better. This is a low-rate remote control view.
+WM_PRINT support, background input and minimized rendering depend on the app.
+
 ## Existing FILE commands
 
 File names refer to the device filesystem (normally `/sdcard/...`). Responses

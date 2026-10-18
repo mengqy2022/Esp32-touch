@@ -8,6 +8,19 @@ from device_settings import load_config, save_config, driver_summary, install_si
 
 
 class SettingsTests(unittest.TestCase):
+    def test_window_identity_is_bounded_and_optional(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'config.json'
+            config = dict(device=dict(vid=0x1a86, pid=0x7523))
+            for target in (None, dict(hwnd=123, pid=456, cookie=789)):
+                config['screen_window'] = target
+                save_config(path, config)
+                self.assertEqual(load_config(path)['screen_window'], target)
+            for target in ({}, dict(hwnd=True, pid=456, cookie=789), dict(hwnd=123, pid=456, cookie=0), 'window'):
+                config['screen_window'] = target
+                save_config(path, config)
+                with self.assertRaises(ValueError): load_config(path)
+
     def test_legacy_combined_mode_migrates_to_codex_and_preserves_device(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'config.json'

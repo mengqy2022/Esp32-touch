@@ -34,3 +34,4 @@ jobs:
       - run: python -m unittest discover -s tools -p test_ai_usage.py -v
       - run: python -m unittest discover -s tools -p test_device_settings.py -v
       - run: python -m unittest discover -s tools -p test_desktop_settings.py -v
+      - run: python -m unittest discover -s tools -p test_pc_screen.py -v

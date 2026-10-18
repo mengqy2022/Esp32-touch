@@ -28,6 +28,12 @@ def load_config(path):
             raise ValueError('USB 设备标识无效')
     if device.get('mode') == 'manual' and not device.get('device'):
         raise ValueError('请选择手动 COM 端口')
+    target = config.get('screen_window')
+    if target is not None:
+        if (not isinstance(target, dict) or
+                any(type(target.get(key)) is not int or not 0 < target[key] <= maximum
+                    for key, maximum in (('hwnd', 2**64 - 1), ('pid', 2**32 - 1), ('cookie', 2**31 - 1)))):
+            raise ValueError('窗口配置无效，请重新选择窗口')
     return config
 
 
