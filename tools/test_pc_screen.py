@@ -1,8 +1,9 @@
 import struct
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from pc_screen import WIDTH, HEIGHT, Mirror, checksum, encode_frame, map_point, viewport
+from pc_monitor_host import connect
 
 
 class Serial:
@@ -84,6 +85,21 @@ class ScreenTests(unittest.TestCase):
         mirror.tick(ser)
         self.assertEqual(ser.written[-1], b'\xff\x00')
         self.assertEqual(mirror.shown[:3], (21, 1, (320, 176)))
+
+    def test_window_identity_can_use_pid_and_class_without_property(self):
+        target = dict(hwnd=123, pid=77, class_name='Chrome_WidgetWin_1',
+                      cookie=42, property_bound=False)
+        self.assertEqual(target['property_bound'], False)
+
+    def test_serial_connection_does_not_toggle_esp32_reset_lines(self):
+        fake = Mock()
+        with patch('pc_monitor_host.serial.Serial', return_value=fake) as serial_open:
+            self.assertIs(connect('COM5'), fake)
+        serial_open.assert_called_once_with(port=None, baudrate=115200, timeout=0.2, write_timeout=5)
+        self.assertFalse(fake.dtr)
+        self.assertFalse(fake.rts)
+        self.assertEqual(fake.port, 'COM5')
+        fake.open.assert_called_once_with()
 
 
 if __name__ == '__main__': unittest.main()

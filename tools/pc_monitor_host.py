@@ -336,7 +336,13 @@ def connect(port, baud=BAUD, stop_event=None):
         sys.exit(1)
     while stop_event is None or not stop_event.is_set():
         try:
-            ser = serial.Serial(port, baud, timeout=0.2, write_timeout=5)
+            # Opening COM5 with pyserial's default DTR/RTS toggles resets the
+            # ESP32 and clears the currently open PC SCREEN session.
+            ser = serial.Serial(port=None, baudrate=baud, timeout=0.2, write_timeout=5)
+            ser.dtr = False
+            ser.rts = False
+            ser.port = port
+            ser.open()
             return ser
         except (serial.SerialException, OSError) as exc:
             print(f"[{port}] 打开失败: {exc} — 3 秒后重试 (Ctrl+C 退出)")

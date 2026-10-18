@@ -26,7 +26,7 @@ from pc_screen import Window
 APP_NAME = 'ESP32TouchDashboard'
 RUN_KEY = r'Software\Microsoft\Windows\CurrentVersion\Run'
 APPROVED_KEY = r'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
-APP_VERSION = '2026.10.18.1'
+APP_VERSION = '2026.10.18.2'
 
 
 def choose_screen_window(root):
@@ -39,13 +39,19 @@ def choose_screen_window(root):
             '当前窗口：' + current + '\n选择后，在设备 SYSTEM → PC SCREEN 查看并触摸控制。'
             '\n只控制所选窗口；关闭窗口后需要重新选择。\n最小化采集与后台操作取决于软件支持；黑屏时请还原窗口。',
             [(501, '停止窗口共享与控制'), (502, '刷新窗口列表')] +
-            [(600 + i, target['title'][:100] + f"\nPID {target['pid']}") for i, target in enumerate(targets)], root)
+            [(600 + i, target['title'][:100] +
+              f"\n{target.get('process') or '未知程序'}  PID {target['pid']}")
+             for i, target in enumerate(targets)], root)
         if selected == 502:
             continue
         if selected == 501:
             config.pop('screen_window', None)
         elif 600 <= selected < 600 + len(targets):
-            config['screen_window'] = windows.select(targets[selected - 600])
+            try:
+                config['screen_window'] = windows.select(targets[selected - 600])
+            except (OSError, ValueError) as error:
+                message('窗口选择失败：' + str(error) + '\n\n请先刷新列表后重试。', 16)
+                continue
         else:
             return
         save_config(root / 'config.json', config)

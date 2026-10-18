@@ -4,6 +4,7 @@ from ctypes import wintypes as w
 import secrets
 import sys
 import time
+import os
 
 WIDTH, HEIGHT = 160, 88
 PROPERTY = 'ESP32TouchDashboard.SelectedWindow'
@@ -53,6 +54,7 @@ class Window:
             raise OSError('Window sharing requires Windows')
         self.u = ctypes.WinDLL('user32', use_last_error=True)
         self.g = ctypes.WinDLL('gdi32', use_last_error=True)
+        self.k = ctypes.WinDLL('kernel32', use_last_error=True)
         self.last_size = None
         signatures = [
             (self.u, 'GetDC', w.HDC, [w.HWND]),
@@ -60,12 +62,16 @@ class Window:
             (self.u, 'GetPropW', w.HANDLE, [w.HWND, w.LPCWSTR]),
             (self.u, 'SetPropW', w.BOOL, [w.HWND, w.LPCWSTR, w.HANDLE]),
             (self.u, 'GetWindowThreadProcessId', w.DWORD, [w.HWND, ctypes.POINTER(w.DWORD)]),
+            (self.u, 'GetClassNameW', ctypes.c_int, [w.HWND, w.LPWSTR, ctypes.c_int]),
             (self.u, 'GetClientRect', w.BOOL, [w.HWND, ctypes.POINTER(w.RECT)]),
+            (self.u, 'ClientToScreen', w.BOOL, [w.HWND, ctypes.POINTER(w.POINT)]),
             (self.u, 'IsWindowVisible', w.BOOL, [w.HWND]),
             (self.u, 'IsWindow', w.BOOL, [w.HWND]),
             (self.u, 'IsIconic', w.BOOL, [w.HWND]),
+            (self.u, 'ShowWindow', w.BOOL, [w.HWND, ctypes.c_int]),
             (self.u, 'SendMessageTimeoutW', ctypes.c_ssize_t,
              [w.HWND, w.UINT, w.WPARAM, w.LPARAM, w.UINT, w.UINT, ctypes.POINTER(ctypes.c_size_t)]),
+            (self.u, 'PrintWindow', w.BOOL, [w.HWND, w.HDC, w.UINT]),
             (self.u, 'PostMessageW', w.BOOL, [w.HWND, w.UINT, w.WPARAM, w.LPARAM]),
             (self.u, 'ChildWindowFromPointEx', w.HWND, [w.HWND, w.POINT, w.UINT]),
             (self.u, 'MapWindowPoints', ctypes.c_int, [w.HWND, w.HWND, ctypes.POINTER(w.POINT), w.UINT]),
@@ -77,7 +83,12 @@ class Window:
             (self.g, 'PatBlt', w.BOOL, [w.HDC, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, w.DWORD]),
             (self.g, 'StretchBlt', w.BOOL, [w.HDC, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
                                         w.HDC, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, w.DWORD]),
+            (self.g, 'BitBlt', w.BOOL, [w.HDC, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                        w.HDC, ctypes.c_int, ctypes.c_int, w.DWORD]),
             (self.g, 'GetDIBits', ctypes.c_int, [w.HDC, w.HBITMAP, w.UINT, w.UINT, ctypes.c_void_p, ctypes.c_void_p, w.UINT]),
+            (self.k, 'OpenProcess', w.HANDLE, [w.DWORD, w.BOOL, w.DWORD]),
+            (self.k, 'CloseHandle', w.BOOL, [w.HANDLE]),
+            (self.k, 'QueryFullProcessImageNameW', w.BOOL, [w.HANDLE, w.DWORD, w.LPWSTR, ctypes.POINTER(w.DWORD)]),
         ]
         for dll, name, result, args in signatures:
             function = getattr(dll, name)
@@ -91,11 +102,24 @@ class Window:
         def visit(hwnd, _):
             title = ctypes.create_unicode_buffer(512)
             self.u.GetWindowTextW(hwnd, title, len(title))
-            if title.value and self.u.IsWindowVisible(hwnd):
+            if self.u.IsWindowVisible(hwnd):
                 pid = w.DWORD()
                 self.u.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-                if pid.value != __import__('os').getpid():
-                    result.append(dict(hwnd=hwnd, pid=pid.value, title=title.value))
+                if pid.value == os.getpid():
+                    return True
+                class_name = ctypes.create_unicode_buffer(256)
+                self.u.GetClassNameW(hwnd, class_name, len(class_name))
+                image = ctypes.create_unicode_buffer(1024)
+                image_handle = self.k.OpenProcess(0x1000, False, pid.value)
+                if image_handle:
+                    length = w.DWORD(len(image))
+                    self.k.QueryFullProcessImageNameW(image_handle, 0, image, ctypes.byref(length))
+                    self.k.CloseHandle(image_handle)
+                process = os.path.basename(image.value) if image.value else ''
+                if title.value or process:
+                    result.append(dict(hwnd=hwnd, pid=pid.value,
+                                       title=title.value or '[' + process + ']',
+                                       class_name=class_name.value, process=process))
             return True
         self.u.EnumWindows.argtypes = [callback, w.LPARAM]
         self.u.EnumWindows(visit, 0)
@@ -107,15 +131,22 @@ class Window:
         if pid.value != target['pid']:
             raise OSError('Window closed; refresh the list')
         cookie = secrets.randbelow(0x7ffffffe) + 1
-        if not self.u.SetPropW(target['hwnd'], PROPERTY, cookie):
-            raise OSError('Cannot select this window (check application privileges)')
-        return dict(target, cookie=cookie)
+        selected = dict(target, cookie=cookie)
+        # Packaged/elevated applications may reject SetPropW even though their
+        # window still accepts capture and pointer messages.
+        selected['property_bound'] = bool(self.u.SetPropW(target['hwnd'], PROPERTY, cookie))
+        return selected
 
     def valid(self, target):
         pid = w.DWORD()
         self.u.GetWindowThreadProcessId(target['hwnd'], ctypes.byref(pid))
-        return (bool(self.u.IsWindow(target['hwnd'])) and pid.value == target['pid'] and
-                self.u.GetPropW(target['hwnd'], PROPERTY) == target['cookie'])
+        if not bool(self.u.IsWindow(target['hwnd'])) or pid.value != target['pid']:
+            return False
+        if target.get('property_bound'):
+            return self.u.GetPropW(target['hwnd'], PROPERTY) == target['cookie']
+        class_name = ctypes.create_unicode_buffer(256)
+        self.u.GetClassNameW(target['hwnd'], class_name, len(class_name))
+        return not target.get('class_name') or class_name.value == target['class_name']
 
     def size(self, target):
         if not self.valid(target):
@@ -134,7 +165,18 @@ class Window:
         return size
 
     def capture(self, target):
-        width, height = size = self.size(target)
+        was_iconic = bool(self.u.IsIconic(target['hwnd']))
+        if was_iconic:
+            # Qt/OpenGL often cannot render a minimized surface. Restore it
+            # without activating it, capture, then put it back immediately.
+            self.u.ShowWindow(target['hwnd'], 4)  # SW_SHOWNOACTIVATE
+            time.sleep(.15)
+        try:
+            width, height = size = self.size(target)
+        except Exception:
+            if was_iconic:
+                self.u.ShowWindow(target['hwnd'], 6)  # SW_MINIMIZE
+            raise
         # Bound GDI allocation even for huge or malicious window dimensions.
         if width * height > 16_000_000:
             raise OSError('Window too large; resize it')
@@ -156,8 +198,21 @@ class Window:
             self.g.PatBlt(source, 0, 0, width, height, 0x00000042)
             answer = ctypes.c_size_t()
             # shortcut: WM_PRINTCLIENT depends on the app; use Windows Graphics Capture if broader support is needed.
-            if not self.u.SendMessageTimeoutW(target['hwnd'], 0x317, source, 4 | 8 | 16,
-                                              2 | 0x20, 350, ctypes.byref(answer)):
+            captured = self.u.PrintWindow(target['hwnd'], source, 2)
+            if not captured:
+                captured = self.u.SendMessageTimeoutW(target['hwnd'], 0x318, source, 4 | 8 | 16,
+                                                      2 | 0x20, 350, ctypes.byref(answer))
+            if not captured:
+                captured = self.u.SendMessageTimeoutW(target['hwnd'], 0x317, source, 4 | 8 | 16,
+                                                      2 | 0x20, 350, ctypes.byref(answer))
+            if not captured and not self.u.IsIconic(target['hwnd']):
+                # Qt/OpenGL windows may reject both print messages while they
+                # are visible; copy their client pixels from the desktop.
+                origin = w.POINT(0, 0)
+                if self.u.ClientToScreen(target['hwnd'], ctypes.byref(origin)):
+                    captured = self.g.BitBlt(source, 0, 0, width, height, screen,
+                                             origin.x, origin.y, 0x00CC0020)
+            if not captured:
                 raise OSError('Window not responding to capture')
             self.g.PatBlt(output, 0, 0, WIDTH, HEIGHT, 0x00000042)
             left, top, dw, dh = viewport(width, height)
@@ -177,9 +232,18 @@ class Window:
             self.g.DeleteDC(source)
             self.g.DeleteDC(output)
             self.u.ReleaseDC(None, screen)
+            if was_iconic:
+                self.u.ShowWindow(target['hwnd'], 6)
 
     def gesture(self, target, size, x1, y1, x2, y2, wheel):
+        was_iconic = bool(self.u.IsIconic(target['hwnd']))
+        if was_iconic:
+            self.u.ShowWindow(target['hwnd'], 4)
+            time.sleep(.15)
+            size = self.size(target)
         if self.size(target) != size:
+            if was_iconic:
+                self.u.ShowWindow(target['hwnd'], 6)
             raise ValueError('Window resized; wait for the next frame')
         start, end = map_point(x1, y1, size), map_point(x2, y2, size)
         hwnd = target['hwnd']
@@ -194,19 +258,24 @@ class Window:
         def post(message, flags, x, y):
             if not self.valid(target) or not self.u.PostMessageW(hwnd, message, flags, (x & 65535) | ((y & 65535) << 16)):
                 raise OSError('Window rejected pointer input')
-        if wheel:
-            self.u.MapWindowPoints(hwnd, None, ctypes.byref(point), 1)
-            post(0x20a, ((wheel * 120) & 65535) << 16, point.x, point.y)
-            return
-        post(0x200, 0, point.x, point.y)
-        post(0x201, 1, point.x, point.y)
         try:
+            if wheel:
+                self.u.MapWindowPoints(hwnd, None, ctypes.byref(point), 1)
+                post(0x20a, ((wheel * 120) & 65535) << 16, point.x, point.y)
+                return
+            post(0x200, 0, point.x, point.y)
+            post(0x201, 1, point.x, point.y)
             for step in range(1, 9):
                 post(0x200, 1, point.x + (finish.x - point.x) * step // 8,
                      point.y + (finish.y - point.y) * step // 8)
                 time.sleep(.01)
         finally:
-            post(0x202, 0, finish.x, finish.y)
+            try:
+                if not wheel:
+                    post(0x202, 0, finish.x, finish.y)
+            finally:
+                if was_iconic:
+                    self.u.ShowWindow(target['hwnd'], 6)
 
 
 class Mirror:
@@ -217,6 +286,7 @@ class Mirror:
         self.buffer = b''
         self.session = self.frame = 0
         self.shown = None
+        self.announced = False
 
     def read(self, ser):
         self.buffer += ser.read(ser.in_waiting) if ser.in_waiting else b''
@@ -238,7 +308,7 @@ class Mirror:
                     if (self.shown and (session, frame) == self.shown[:2] and
                             time.monotonic() - self.shown[3] < 8 and wheel in (-1, 0, 1)):
                         self.windows.gesture(self.target, self.shown[2], x1, y1, x2, y2, wheel)
-            except (OSError, ValueError) as error:
+            except (OSError, ValueError, ctypes.ArgumentError) as error:
                 print('SCREEN| ' + str(error), flush=True)
         self.buffer = self.buffer[-4096:]
         return lines
@@ -275,5 +345,8 @@ class Mirror:
         ser.write(payload)
         if self.wait(ser, 'SCREEN:OK', 6, None):
             self.shown = session, self.frame, size, time.monotonic()
+            if not self.announced:
+                print('SCREEN| frame transfer active', flush=True)
+                self.announced = True
         else:
             self.shown = None
