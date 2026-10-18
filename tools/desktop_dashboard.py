@@ -26,7 +26,7 @@ from pc_screen import Window
 APP_NAME = 'ESP32TouchDashboard'
 RUN_KEY = r'Software\Microsoft\Windows\CurrentVersion\Run'
 APPROVED_KEY = r'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
-APP_VERSION = '2026.10.18.2'
+APP_VERSION = '2026.10.18.3'
 
 
 def choose_screen_window(root):
@@ -259,6 +259,20 @@ def install_root():
         return Path(configured).resolve()
     if getattr(sys, 'frozen', False) and (Path(sys.executable).parent / 'config.json').is_file():
         return Path(sys.executable).parent
+    if getattr(sys, 'frozen', False):
+        workspace_runtime = Path(sys.executable).parent.parent / '.dashboard'
+        if (workspace_runtime / 'config.json').is_file():
+            return workspace_runtime
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
+            command = winreg.QueryValueEx(key, APP_NAME)[0]
+        installed = Path(command.split('"')[1]).parent
+        if installed.drive.upper() != 'C:' and (installed / 'config.json').is_file():
+            return installed
+    except (OSError, IndexError):
+        pass
+    if getattr(sys, 'frozen', False) and Path(sys.executable).drive.upper() != 'C:':
+        return Path(sys.executable).parent / '.dashboard'
     return Path(os.environ['LOCALAPPDATA']) / APP_NAME
 
 
@@ -525,14 +539,21 @@ def main():
         resume(root)
     elif args.enable_autostart or args.disable_autostart:
         autostart(args.enable_autostart)
-    elif not (root / 'config.json').exists():
-        if message('安装 ESP32 Touch Dashboard 并启用登录自启？\n\n无需 Python 或管理员权限，插入设备后自动连接。\n价格使用你设置的单价和汇率，只显示估算金额。', 4) == 6:
-            install()
     else:
-        control_dialog(root)
+        root.mkdir(parents=True, exist_ok=True)
+        if not (root / 'config.json').exists():
+            save_config(root / 'config.json', dict(device=dict(vid=0x1A86, pid=0x7523), ai_source='codex'))
+        update_prices(root)
+        if getattr(sys, 'frozen', False) and not (root / (APP_NAME + '.exe')).exists():
+            shutil.copy2(sys.executable, root / (APP_NAME + '.exe'))
+        resume(root)
+        from dashboard_gui import DashboardGUI
+        DashboardGUI(root, sys.modules[__name__]).run()
 
 
 if __name__ == '__main__':
+    import multiprocessing
+    multiprocessing.freeze_support()
     try:
         main()
     except Exception as error:

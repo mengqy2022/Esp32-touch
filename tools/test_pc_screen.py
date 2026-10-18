@@ -2,7 +2,8 @@ import struct
 import unittest
 from unittest.mock import Mock, patch
 
-from pc_screen import WIDTH, HEIGHT, Mirror, checksum, encode_frame, map_point, viewport
+from pc_screen import (WIDTH, HEIGHT, Mirror, checksum, encode_frame, map_point,
+                       viewport, crop_viewport, map_view_point)
 from pc_monitor_host import connect
 
 
@@ -30,11 +31,11 @@ class ScreenTests(unittest.TestCase):
         with self.assertRaises(ValueError): encode_frame(b'bad')
 
     def test_letterbox_mapping_and_boundaries(self):
-        self.assertEqual(viewport(320, 176), (0, 0, 160, 88))
-        self.assertEqual(map_point(159, 87, (320, 176)), (318, 174))
-        self.assertEqual(viewport(100, 100), (36, 0, 88, 88))
-        with self.assertRaises(ValueError): map_point(35, 44, (100, 100))
-        with self.assertRaises(ValueError): map_point(160, 0, (320, 176))
+        self.assertEqual(viewport(320, 176), (0, 0, 320, 176))
+        self.assertEqual(map_point(319, 175, (320, 176)), (319, 175))
+        self.assertEqual(viewport(100, 100), (72, 0, 176, 176))
+        with self.assertRaises(ValueError): map_point(71, 88, (100, 100))
+        with self.assertRaises(ValueError): map_point(320, 0, (320, 176))
         for size in ((0, 100), (100, -1), (20000, 100)):
             with self.assertRaises(ValueError): viewport(*size)
 
@@ -53,7 +54,8 @@ class ScreenTests(unittest.TestCase):
         mirror.shown = 21, 1, (320, 176), time.monotonic()
         ser.incoming = b'SCREEN:INPUT|21|1|10|10|20|20|0\n'
         mirror.read(ser)
-        window.gesture.assert_called_once_with(mirror.target, (320, 176), 10, 10, 20, 20, 0)
+        window.gesture.assert_called_once_with(mirror.target, (320, 176), 10, 10, 20, 20, 0,
+                                                {'zoom': 1, 'x': .5, 'y': .5})
         window.reset_mock()
         for data in (b'SCREEN:INPUT|22|1|10|10|20|20|0\n', b'SCREEN:INPUT|21|2|10|10|20|20|0\n',
                      b'SCREEN:INPUT|21|1|10|10|20|20|99\n', b'SCREEN:INPUT|x\n'):
@@ -72,8 +74,9 @@ class ScreenTests(unittest.TestCase):
         ser = Serial()
         mirror.wait = Mock(return_value=False)
         mirror.tick(ser)
-        self.assertEqual(len(ser.written), 2)
-        self.assertTrue(ser.written[1].startswith(b'SCREEN:FRAME|21|1|2|'))
+        self.assertEqual(len(ser.written), 3)
+        self.assertEqual(ser.written[1], b'SCREEN:APP|generic|\n')
+        self.assertTrue(ser.written[2].startswith(f'SCREEN:FRAME|21|{mirror.frame}|2|'.encode()))
 
     def test_successful_handshake_retains_mapping(self):
         window = Mock()
@@ -84,7 +87,60 @@ class ScreenTests(unittest.TestCase):
         ser = Serial()
         mirror.tick(ser)
         self.assertEqual(ser.written[-1], b'\xff\x00')
-        self.assertEqual(mirror.shown[:3], (21, 1, (320, 176)))
+        self.assertEqual(mirror.shown[:3], (21, mirror.frame, (320, 176)))
+
+    def test_zoom_crop_and_mapping(self):
+        self.assertEqual(crop_viewport(320, 176, 2, (.5, .5)), (80, 44, 160, 88))
+        self.assertEqual(map_view_point(0, 0, (320, 176), 2, (.5, .5)), (80, 44))
+        self.assertEqual(map_view_point(319, 175, (320, 176), 2, (.5, .5)), (239, 131))
+        self.assertEqual(crop_viewport(1000, 100, 2), (409, 0, 181, 100))
+
+    def test_device_view_command_changes_capture_view(self):
+        window = Mock()
+        window.capture.return_value = (b'\xff\x00', (320, 176))
+        mirror = Mirror(dict(hwnd=1), window)
+        mirror.session = 21
+        mirror.wait = Mock(return_value=True)
+        ser = Serial()
+        mirror.tick(ser)
+        ser.incoming = f'SCREEN:VIEW|21|{mirror.frame}|2|80|44\n'.encode()
+        mirror.read(ser)
+        self.assertEqual(mirror.view['zoom'], 2)
+
+    def test_switch_clears_old_frame_and_capture_process(self):
+        import time
+        mirror = Mirror(dict(hwnd=1), Mock())
+        mirror.shown = 21, 44, (320, 176), time.monotonic()
+        mirror.session = 21
+        ser = Serial()
+        with patch('pc_screen.Window'):
+            mirror.set_target(dict(hwnd=2, title='Yomi'), ser)
+        self.assertIsNone(mirror.shown)
+        ser.incoming = b'SCREEN:INPUT|21|44|10|10|10|10|0\n'
+        mirror.read(ser)
+        mirror.windows.gesture.assert_not_called()
+
+    def test_media_command_requires_current_session(self):
+        window = Mock()
+        mirror = Mirror(dict(hwnd=1), window)
+        mirror.session = 21
+        ser = Serial()
+        ser.incoming = b'SCREEN:COMMAND|22|play_pause\nSCREEN:COMMAND|21|play_pause\n'
+        mirror.read(ser)
+        window.command.assert_called_once_with(mirror.target, 'play_pause')
+
+    def test_hung_capture_process_is_terminated(self):
+        from pc_screen import CaptureProcess
+        capture = CaptureProcess()
+        capture.target = dict(hwnd=1)
+        capture.process = Mock()
+        capture.connection = Mock()
+        capture.connection.poll.return_value = False
+        process = capture.process
+        with self.assertRaises(OSError):
+            capture.capture(dict(hwnd=1), {})
+        process.terminate.assert_called_once()
+        self.assertIsNone(capture.process)
 
     def test_window_identity_can_use_pid_and_class_without_property(self):
         target = dict(hwnd=123, pid=77, class_name='Chrome_WidgetWin_1',
@@ -95,7 +151,7 @@ class ScreenTests(unittest.TestCase):
         fake = Mock()
         with patch('pc_monitor_host.serial.Serial', return_value=fake) as serial_open:
             self.assertIs(connect('COM5'), fake)
-        serial_open.assert_called_once_with(port=None, baudrate=115200, timeout=0.2, write_timeout=5)
+        serial_open.assert_called_once_with(port=None, baudrate=115200, timeout=0.2, write_timeout=18)
         self.assertFalse(fake.dtr)
         self.assertFalse(fake.rts)
         self.assertEqual(fake.port, 'COM5')

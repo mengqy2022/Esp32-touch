@@ -39,6 +39,7 @@ import socket
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 from ai_usage import AIUsage, SOURCES, ai_packet
 from pc_screen import Mirror
@@ -338,7 +339,7 @@ def connect(port, baud=BAUD, stop_event=None):
         try:
             # Opening COM5 with pyserial's default DTR/RTS toggles resets the
             # ESP32 and clears the currently open PC SCREEN session.
-            ser = serial.Serial(port=None, baudrate=baud, timeout=0.2, write_timeout=5)
+            ser = serial.Serial(port=None, baudrate=baud, timeout=0.2, write_timeout=18)
             ser.dtr = False
             ser.rts = False
             ser.port = port
@@ -369,6 +370,7 @@ def main(argv=None, stop_event=None):
                     help='可选：启动时选择设备来源一次；默认保留设备选择，两套用量均独立发送')
     ap.add_argument('--claude-home', help='Claude Code 配置目录，默认 CLAUDE_CONFIG_DIR 或 ~/.claude')
     ap.add_argument('--screen-window', type=json.loads, help='Selected Win32 window identity (JSON)')
+    ap.add_argument('--screen-config', help='Reload the selected window without reopening the serial port')
     ap.add_argument("--duration", type=float, default=0,
                     help="运行指定秒数后退出，0 表示持续运行")
     args = ap.parse_args(argv)
@@ -404,11 +406,18 @@ def main(argv=None, stop_event=None):
     select_source = args.ai_source
     started = time.monotonic()
     mirror = Mirror(args.screen_window)
+    screen_config = Path(args.screen_config) if args.screen_config else None
 
     while stop_event is None or not stop_event.is_set():
         if args.duration and time.monotonic() - started >= args.duration:
             break
         try:
+            if screen_config:
+                try:
+                    from device_settings import load_config
+                    mirror.set_target(load_config(screen_config).get('screen_window'), ser)
+                except (OSError, ValueError) as error:
+                    print('SCREEN| Invalid configuration: ' + str(error), flush=True)
             cpu = perf.cpu_percent()
             mem, mem_used, mem_total = perf.mem_info()
             gpu_load, gpu_temp = gpu.read()
@@ -464,7 +473,9 @@ def main(argv=None, stop_event=None):
             if ser is None:
                 break
             first = True
-            mirror = Mirror(args.screen_window)
+            target = mirror.target
+            mirror.close()
+            mirror = Mirror(target)
             continue
         except KeyboardInterrupt:
             break
@@ -478,6 +489,7 @@ def main(argv=None, stop_event=None):
         except KeyboardInterrupt:
             break
 
+    mirror.close()
     try:
         ser.close()
     except Exception:

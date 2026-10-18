@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 $env:PYTHONPATH = ''
 $dashboardTemp = Join-Path $WorkRoot 'temp'
-$dashboardEnv = Join-Path $WorkRoot 'packaging'
+$dashboardEnv = Join-Path $WorkRoot 'packaging-gui'
 $dashboardBuild = Join-Path $WorkRoot 'build'
 $dashboardOutput = Join-Path $WorkRoot 'output'
 foreach ($dashboardDir in @($WorkRoot, $dashboardTemp, $dashboardBuild, $dashboardOutput)) {
@@ -21,6 +21,8 @@ $env:PYINSTALLER_CONFIG_DIR = Join-Path $WorkRoot 'pyinstaller-cache'
 $env:CCACHE_DIR = Join-Path $WorkRoot 'ccache'
 $dashboardPython = Join-Path $dashboardEnv 'Scripts/python.exe'
 if (-not (Test-Path -LiteralPath $dashboardPython)) {
+    & $PythonPath -c 'import tkinter'
+    if ($LASTEXITCODE -ne 0) { throw 'Use -PythonPath with a Python installation that includes tkinter.' }
     & $PythonPath -m venv $dashboardEnv
     if ($LASTEXITCODE -ne 0) { throw 'Could not create packaging environment.' }
 }

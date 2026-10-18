@@ -98,7 +98,8 @@ def run_agent(config_path, quit_event=None):
             if state != previous_state:
                 logger.info('State: %s', state)
                 previous_state = state
-            if worker and (not worker.is_alive() or port != connected or config != worker_config):
+            restart_config = {key: value for key, value in config.items() if key != 'screen_window'}
+            if worker and (not worker.is_alive() or port != connected or restart_config != worker_config):
                 stop_worker.set()
                 worker.join(timeout=12)
                 if worker.is_alive():
@@ -108,14 +109,15 @@ def run_agent(config_path, quit_event=None):
                 connected = None
             if port and worker is None:
                 options = ['--port', port, '--codex-refresh', str(config.get('codex_refresh', 5)),
-                           '--codex-prices', str(runtime / 'codex_prices.json')]
+                           '--codex-prices', str(runtime / 'codex_prices.json'),
+                           '--screen-config', str(config_path)]
                 if config.get('screen_window'):
                     options += ['--screen-window', json.dumps(config['screen_window'])]
                 stop_worker = threading.Event()
                 worker = threading.Thread(target=host_main, args=(options, stop_worker), daemon=True)
                 worker.start()
                 connected = port
-                worker_config = config
+                worker_config = restart_config
                 logger.info('Telemetry started on %s (in-process)', port)
             status_path = runtime / 'connection.json'
             temp_status = runtime / 'connection.tmp'

@@ -4,6 +4,7 @@ from ctypes import wintypes as w
 import json
 import threading
 import time
+from unittest.mock import patch
 
 from pc_screen import Window, WIDTH, HEIGHT, map_point
 
@@ -69,12 +70,15 @@ def main():
             u.ShowWindow(hwnd, 6 if minimized else 9)
             time.sleep(.2)
             events.clear()
-            before, size = api.capture(target)
+            # This test window paints via WM_PRINT; exercise that explicit fallback.
+            with patch.object(api.u, 'PrintWindow', return_value=0):
+                before, size = api.capture(target)
             assert any(before[1::2]), 'Unexpected black frame'
-            api.gesture(target, size, 40, 20, 100, 60, 0)
-            api.gesture(target, size, 80, 44, 80, 44, 1)
+            api.gesture(target, size, 80, 40, 200, 120, 0)
+            api.gesture(target, size, 160, 88, 160, 88, 1)
             time.sleep(.1)
-            after, _ = api.capture(target)
+            with patch.object(api.u, 'PrintWindow', return_value=0):
+                after, _ = api.capture(target)
             assert before != after, 'Click did not change rendered content'
             assert [e[0] for e in events] == [0x201, 0x202, 0x20a], events
             report['minimized' if minimized else 'visible'] = dict(capture=True, click=True, drag=True,

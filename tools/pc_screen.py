@@ -5,8 +5,9 @@ import secrets
 import sys
 import time
 import os
+import multiprocessing
 
-WIDTH, HEIGHT = 160, 88
+WIDTH, HEIGHT = 320, 176
 PROPERTY = 'ESP32TouchDashboard.SelectedWindow'
 
 
@@ -48,6 +49,32 @@ def map_point(x, y, size):
     return min(size[0] - 1, (x - left) * size[0] // width), min(size[1] - 1, (y - top) * size[1] // height)
 
 
+def crop_viewport(width, height, zoom=1, focus=(.5, .5)):
+    """Return a source crop with the device's aspect ratio."""
+    viewport(width, height)
+    if zoom <= 1:
+        return 0, 0, width, height
+    crop_width = max(1, min(width, int(width / zoom)))
+    crop_height = max(1, int(crop_width * HEIGHT / WIDTH))
+    if crop_height > height:
+        crop_height = height
+        crop_width = max(1, min(width, int(crop_height * WIDTH / HEIGHT)))
+    fx = max(0.0, min(1.0, float(focus[0])))
+    fy = max(0.0, min(1.0, float(focus[1])))
+    left = min(width - crop_width, max(0, int(width * fx - crop_width / 2)))
+    top = min(height - crop_height, max(0, int(height * fy - crop_height / 2)))
+    return left, top, crop_width, crop_height
+
+
+def map_view_point(x, y, size, zoom=1, focus=(.5, .5)):
+    if zoom <= 1:
+        return map_point(x, y, size)
+    left, top, width, height = crop_viewport(*size, zoom, focus)
+    if not 0 <= x < WIDTH or not 0 <= y < HEIGHT:
+        raise ValueError('Touch outside window')
+    return min(size[0] - 1, left + x * width // WIDTH), min(size[1] - 1, top + y * height // HEIGHT)
+
+
 class Window:
     def __init__(self):
         if sys.platform != 'win32':
@@ -68,6 +95,7 @@ class Window:
             (self.u, 'IsWindowVisible', w.BOOL, [w.HWND]),
             (self.u, 'IsWindow', w.BOOL, [w.HWND]),
             (self.u, 'IsIconic', w.BOOL, [w.HWND]),
+            (self.u, 'GetForegroundWindow', w.HWND, []),
             (self.u, 'ShowWindow', w.BOOL, [w.HWND, ctypes.c_int]),
             (self.u, 'SendMessageTimeoutW', ctypes.c_ssize_t,
              [w.HWND, w.UINT, w.WPARAM, w.LPARAM, w.UINT, w.UINT, ctypes.POINTER(ctypes.c_size_t)]),
@@ -85,6 +113,7 @@ class Window:
                                         w.HDC, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, w.DWORD]),
             (self.g, 'BitBlt', w.BOOL, [w.HDC, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
                                         w.HDC, ctypes.c_int, ctypes.c_int, w.DWORD]),
+            (self.g, 'SetStretchBltMode', ctypes.c_int, [w.HDC, ctypes.c_int]),
             (self.g, 'GetDIBits', ctypes.c_int, [w.HDC, w.HBITMAP, w.UINT, w.UINT, ctypes.c_void_p, ctypes.c_void_p, w.UINT]),
             (self.k, 'OpenProcess', w.HANDLE, [w.DWORD, w.BOOL, w.DWORD]),
             (self.k, 'CloseHandle', w.BOOL, [w.HANDLE]),
@@ -164,7 +193,9 @@ class Window:
         self.last_size = identity, size
         return size
 
-    def capture(self, target):
+    def capture(self, target, view=None):
+        if not self.valid(target):
+            raise OSError('Selected window closed; select it again')
         was_iconic = bool(self.u.IsIconic(target['hwnd']))
         if was_iconic:
             # Qt/OpenGL often cannot render a minimized surface. Restore it
@@ -198,14 +229,14 @@ class Window:
             self.g.PatBlt(source, 0, 0, width, height, 0x00000042)
             answer = ctypes.c_size_t()
             # shortcut: WM_PRINTCLIENT depends on the app; use Windows Graphics Capture if broader support is needed.
-            captured = self.u.PrintWindow(target['hwnd'], source, 2)
+            captured = self.u.PrintWindow(target['hwnd'], source, 3)  # client area + full content
             if not captured:
                 captured = self.u.SendMessageTimeoutW(target['hwnd'], 0x318, source, 4 | 8 | 16,
                                                       2 | 0x20, 350, ctypes.byref(answer))
             if not captured:
                 captured = self.u.SendMessageTimeoutW(target['hwnd'], 0x317, source, 4 | 8 | 16,
                                                       2 | 0x20, 350, ctypes.byref(answer))
-            if not captured and not self.u.IsIconic(target['hwnd']):
+            if not captured and not self.u.IsIconic(target['hwnd']) and self.u.GetForegroundWindow() == target['hwnd']:
                 # Qt/OpenGL windows may reject both print messages while they
                 # are visible; copy their client pixels from the desktop.
                 origin = w.POINT(0, 0)
@@ -215,8 +246,18 @@ class Window:
             if not captured:
                 raise OSError('Window not responding to capture')
             self.g.PatBlt(output, 0, 0, WIDTH, HEIGHT, 0x00000042)
-            left, top, dw, dh = viewport(width, height)
-            if not self.g.StretchBlt(output, left, top, dw, dh, source, 0, 0, width, height, 0x00cc0020):
+            self.g.SetStretchBltMode(output, 4)  # HALFTONE preserves small text when downscaling.
+            view = view or {}
+            zoom = int(view.get('zoom', 1))
+            focus = (view.get('x', .5), view.get('y', .5))
+            if zoom > 1:
+                crop_left, crop_top, crop_width, crop_height = crop_viewport(width, height, zoom, focus)
+                scaled = self.g.StretchBlt(output, 0, 0, WIDTH, HEIGHT, source,
+                                            crop_left, crop_top, crop_width, crop_height, 0x00cc0020)
+            else:
+                left, top, dw, dh = viewport(width, height)
+                scaled = self.g.StretchBlt(output, left, top, dw, dh, source, 0, 0, width, height, 0x00cc0020)
+            if not scaled:
                 raise OSError('Cannot scale window bitmap')
             self.g.SelectObject(output, old_small)
             header = ctypes.create_string_buffer(__import__('struct').pack('<IiiHHIIiiII', 40, WIDTH, -HEIGHT, 1, 32, 0, WIDTH * HEIGHT * 4, 0, 0, 0, 0))
@@ -235,7 +276,9 @@ class Window:
             if was_iconic:
                 self.u.ShowWindow(target['hwnd'], 6)
 
-    def gesture(self, target, size, x1, y1, x2, y2, wheel):
+    def gesture(self, target, size, x1, y1, x2, y2, wheel, view=None):
+        if not self.valid(target):
+            raise OSError('Selected window closed; select it again')
         was_iconic = bool(self.u.IsIconic(target['hwnd']))
         if was_iconic:
             self.u.ShowWindow(target['hwnd'], 4)
@@ -245,7 +288,10 @@ class Window:
             if was_iconic:
                 self.u.ShowWindow(target['hwnd'], 6)
             raise ValueError('Window resized; wait for the next frame')
-        start, end = map_point(x1, y1, size), map_point(x2, y2, size)
+        view = view or {}
+        zoom = int(view.get('zoom', 1))
+        focus = (view.get('x', .5), view.get('y', .5))
+        start, end = map_view_point(x1, y1, size, zoom, focus), map_view_point(x2, y2, size, zoom, focus)
         hwnd = target['hwnd']
         point = w.POINT(*start)
         for _ in range(16):
@@ -277,6 +323,75 @@ class Window:
                 if was_iconic:
                     self.u.ShowWindow(target['hwnd'], 6)
 
+        return end
+
+    def command(self, target, command):
+        """Execute a small, app-independent media shortcut."""
+        if not self.valid(target):
+            raise OSError('Selected window closed; select it again')
+        keys = {'previous': 12, 'next': 11, 'play_pause': 14,
+                'volume_down': 9, 'volume_up': 10}
+        app_command = keys.get(command)
+        if app_command is None or target.get('process', '').lower() != 'cloudmusic.exe':
+            raise ValueError('Unsupported PC command')
+        # Target the selected player; global media keys can control another app.
+        result = ctypes.c_size_t()
+        if not self.u.SendMessageTimeoutW(target['hwnd'], 0x319, target['hwnd'],
+                                          app_command << 16, 2, 350, ctypes.byref(result)):
+            raise OSError('Player did not respond to media command')
+
+
+def capture_worker(connection, target):
+    try:
+        window = Window()
+        while True:
+            view = connection.recv()
+            try:
+                connection.send(window.capture(target, view))
+            except (OSError, ValueError) as error:
+                connection.send(str(error))
+    except (EOFError, OSError):
+        pass
+    finally:
+        connection.close()
+
+
+class CaptureProcess:
+    """PrintWindow can hang inside another app; keep it off the serial owner."""
+    def __init__(self):
+        self.process = self.connection = None
+        self.target = None
+
+    def close(self):
+        if self.process:
+            self.process.terminate()
+            self.process.join(1)
+            self.process.close()
+        if self.connection:
+            self.connection.close()
+        self.process = self.connection = None
+
+    def capture(self, target, view):
+        if self.target != target:
+            self.close()
+        if self.process is None:
+            self.target = dict(target)
+            self.connection, child = multiprocessing.Pipe()
+            self.process = multiprocessing.Process(target=capture_worker, args=(child, target), daemon=True)
+            self.process.start()
+            child.close()
+        try:
+            self.connection.send(dict(view))
+            if not self.connection.poll(2):
+                raise OSError('Capture timed out; restore the selected window')
+            result = self.connection.recv()
+            if isinstance(result, str):
+                raise OSError(result)
+            return result
+        except (OSError, EOFError) as error:
+            self.close()
+            raise OSError(str(error)) from error
+
 
 class Mirror:
     """Runs on the telemetry thread; never opens another serial connection."""
@@ -284,9 +399,28 @@ class Mirror:
         self.target = target
         self.windows = windows or (Window() if target else None)
         self.buffer = b''
-        self.session = self.frame = 0
+        self.session = 0
+        self.frame = secrets.randbelow(0xfffffffe) + 1
         self.shown = None
         self.announced = False
+        self.view = {'zoom': 1, 'x': .5, 'y': .5}
+        self.app = None
+        self.capture = windows or CaptureProcess()
+
+    def close(self):
+        if isinstance(self.capture, CaptureProcess):
+            self.capture.close()
+
+    def set_target(self, target, ser):
+        if target == self.target:
+            return
+        self.close()
+        self.target = target
+        self.windows = Window() if target else None
+        self.shown = self.app = None
+        self.view = {'zoom': 1, 'x': .5, 'y': .5}
+        ser.write(b'SCREEN:STATUS|Switching window...\n')
+        print('SCREEN| selected: ' + str((target or {}).get('title', 'none')), flush=True)
 
     def read(self, ser):
         self.buffer += ser.read(ser.in_waiting) if ser.in_waiting else b''
@@ -302,12 +436,28 @@ class Mirror:
                     session = int(fields[1])
                     if session != self.session:
                         self.shown = None
+                        self.view = {'zoom': 1, 'x': .5, 'y': .5}
+                        self.app = None
                     self.session = session
+                elif fields[0] in ('SCREEN:VIEW', 'SCREEN:PAN') and len(fields) == 6:
+                    session, frame, zoom, x, y = map(int, fields[1:])
+                    if self.shown and (session, frame) == self.shown[:2] and 1 <= zoom <= 8:
+                        if fields[0] == 'SCREEN:VIEW':
+                            px, py = map_view_point(x, y, self.shown[2], self.view['zoom'],
+                                                   (self.view['x'], self.view['y']))
+                            self.view.update(zoom=zoom, x=px / self.shown[2][0], y=py / self.shown[2][1])
+                        elif abs(x) <= WIDTH and abs(y) <= HEIGHT:
+                            self.view['x'] = max(0., min(1., self.view['x'] - x / WIDTH / zoom))
+                            self.view['y'] = max(0., min(1., self.view['y'] - y / HEIGHT / zoom))
+                        self.shown = None
                 elif fields[0] == 'SCREEN:INPUT' and len(fields) == 8:
                     session, frame, x1, y1, x2, y2, wheel = map(int, fields[1:])
                     if (self.shown and (session, frame) == self.shown[:2] and
-                            time.monotonic() - self.shown[3] < 8 and wheel in (-1, 0, 1)):
-                        self.windows.gesture(self.target, self.shown[2], x1, y1, x2, y2, wheel)
+                            time.monotonic() - self.shown[3] < 25 and wheel in (-1, 0, 1)):
+                        self.windows.gesture(self.target, self.shown[2], x1, y1, x2, y2, wheel, self.view)
+                elif fields[0] == 'SCREEN:COMMAND' and len(fields) == 3:
+                    if int(fields[1]) == self.session and self.target and self.windows:
+                        self.windows.command(self.target, fields[2])
             except (OSError, ValueError, ctypes.ArgumentError) as error:
                 print('SCREEN| ' + str(error), flush=True)
         self.buffer = self.buffer[-4096:]
@@ -328,10 +478,31 @@ class Mirror:
         # STATE is delivered on the next loop; firmware refreshes it on every query.
         if not self.session: return
         if not self.target:
+            if self.app != 'generic|No window selected':
+                ser.write(b'SCREEN:APP|generic|No window selected\n')
+                self.app = 'generic|No window selected'
             ser.write(b'SCREEN:STATUS|Select a window in the PC dashboard\n')
             return
+        process = (self.target.get('process') or '').casefold()
+        mode = 'music' if process == 'cloudmusic.exe' else (
+            'chatgpt' if process in ('chatgpt.exe', 'chatgpt-win.exe') or
+            'chatgpt' in (self.target.get('title') or '').casefold() else 'generic')
+        title = self.target.get('title', '').replace('|', ' ').replace('\n', ' ').replace('\r', ' ')
+        title = title.encode('utf-8')[:90].decode('utf-8', 'ignore')
+        metadata = f'{mode}|{title}'
+        if metadata != self.app:
+            ser.write(f'SCREEN:APP|{metadata}\n'.encode('utf-8'))
+            self.app = metadata
+        if mode == 'music':
+            self.shown = None
+            if not self.windows.valid(self.target):
+                ser.write(b'SCREEN:STATUS|Music window closed; select again\n')
+                return
+            ser.write(b'SCREEN:STATUS|NetEase Music controls\n')
+            return
         try:
-            payload, size = self.windows.capture(self.target)
+            captured_view = dict(self.view)
+            payload, size = self.capture.capture(self.target, captured_view)
         except (OSError, ValueError) as error:
             self.shown = None
             print('SCREEN| ' + str(error), flush=True)
@@ -343,8 +514,8 @@ class Mirror:
         if not self.wait(ser, 'SCREEN:READY', 1, stop_event): return
         # Once READY arrives, finish the binary frame even if stopping to leave UART aligned.
         ser.write(payload)
-        if self.wait(ser, 'SCREEN:OK', 6, None):
-            self.shown = session, self.frame, size, time.monotonic()
+        if self.wait(ser, 'SCREEN:OK', 18, None):
+            self.shown = (session, self.frame, size, time.monotonic()) if captured_view == self.view else None
             if not self.announced:
                 print('SCREEN| frame transfer active', flush=True)
                 self.announced = True

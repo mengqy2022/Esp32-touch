@@ -10,6 +10,7 @@
 #include "sudoku.h"
 #include "game2048.h"
 #include "flappy.h"
+#include "arcade.h"
 #include "wifi_mgr.h"
 #include "vocabulary.h"
 #include "xpt2046.h"
@@ -122,6 +123,12 @@ static lv_obj_t *s_flappy_pipe_bottom[FLAPPY_PIPE_COUNT];
 static lv_obj_t *s_flappy_score;
 static lv_obj_t *s_flappy_status;
 static lv_timer_t *s_flappy_timer;
+static lv_timer_t *s_arcade_timer;
+static bool s_game_paused;
+static snake_t s_snake;
+static breakout_t s_breakout;
+static lv_obj_t *s_arcade_board, *s_arcade_score, *s_arcade_hint, *s_game_pause_btn;
+static lv_point_t s_arcade_touch;
 static int s_sudoku_puzzle;
 static lv_obj_t *s_sudo_cells[9][9];
 static lv_obj_t *s_sudo_msg;
@@ -259,6 +266,8 @@ static void show_cal_confirm(void);
 static void build_pcmon_screen(void);
 static void refresh_pcmon_screen(void);
 static void on_pcmon_tap(lv_event_t *e);
+static void build_arcade_screen(void);
+static void game_controls(lv_obj_t *scr);
 
 // ---------------- helpers ----------------
 static void style_screen(lv_obj_t *scr)
@@ -501,6 +510,8 @@ static void on_menu_btn(lv_event_t *e)
         case 11: lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_SYSTEM_MENU); break;
         case 12: lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_OTHER_MENU); break;
         case 13: lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_PC_SCREEN); break;
+        case 14: snake_init(&s_snake); lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_SNAKE); break;
+        case 15: breakout_init(&s_breakout); lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_BREAKOUT); break;
         default: break;
     }
 }
@@ -714,13 +725,13 @@ static void build_category_screen(void)
     make_title(scr, game ? "GAME" : system ? "SYSTEM" : "OTHER");
     make_back_btn(scr);
     static const struct { const char *label; int16_t id; } games[] = {
-        {"SUDOKU", 4}, {"2048", 7}, {"FLAPPY", 8}
+        {"SUDOKU", 4}, {"2048", 7}, {"FLAPPY", 8}, {"SNAKE", 14}, {"BREAKOUT", 15}
     }, systems[] = {
         {"SD CHECK", 0}, {"SYSTEM INFO", 1}, {"WIFI", 2}, {"CALIBRATE", 3}, {"PC DETAILS", 9}, {"PC SCREEN", 13}
     }, others[] = {
         {"INVENTORY", 5}, {"VOCAB LAB", 6}
     };
-    int n = game ? 3 : system ? 6 : 2;
+    int n = game ? 5 : system ? 6 : 2;
     lv_color_t accent = game ? CLR_OK : system ? lv_color_hex(0x24D4EA) : lv_color_hex(0xFB923C);
     for (int i = 0; i < n; ++i) {
         const char *label = game ? games[i].label : system ? systems[i].label : others[i].label;
@@ -1381,16 +1392,17 @@ static void refresh_wifi_labels(void)
 }
 
 // ---------------- SUDOKU screen ----------------
-#define SUDO_GRID_X   12
+#define SUDO_GRID_X   6
 #define SUDO_GRID_Y   42
-#define SUDO_CELL     18
-#define SUDO_GRID     162   // 9 * 18
+#define SUDO_CELL     20
+#define SUDO_GRID     180
 
 static void on_sudoku_cell(lv_event_t *e)
 {
     lv_obj_t *target = lv_event_get_target(e);
     int idx = (int)(intptr_t)lv_obj_get_user_data(target);
     if (idx < 0 || idx >= 81) return;
+    if (s_game_paused) return;
     s_sudoku.sel_x = idx % 9;
     s_sudoku.sel_y = idx / 9;
     refresh_sudoku_board();
@@ -1402,6 +1414,7 @@ static void on_sudoku_digit(lv_event_t *e)
     lv_obj_t *target = lv_event_get_target(e);
     int val = (int)(intptr_t)lv_obj_get_user_data(target);
     if (val < 1 || val > 9) return;
+    if (s_game_paused) return;
     bool conflict = sudoku_set(&s_sudoku, s_sudoku.sel_x, s_sudoku.sel_y, val);
     (void)conflict;
     refresh_sudoku_board();
@@ -1410,6 +1423,7 @@ static void on_sudoku_digit(lv_event_t *e)
 static void on_sudoku_erase(lv_event_t *e)
 {
     if (!click_ok()) return;
+    if (s_game_paused) return;
     sudoku_clear(&s_sudoku, s_sudoku.sel_x, s_sudoku.sel_y);
     refresh_sudoku_board();
 }
@@ -1430,33 +1444,35 @@ static void build_sudoku_screen(void)
 
     make_title(scr, "SUDOKU");
     make_back_btn(scr);
+    game_controls(scr);
 
     // Right column: digit keypad (1-9 vertical).
     const char *digits = "123456789";
     for (int i = 0; i < 9; ++i) {
         char buf[2] = {digits[i], '\0'};
         lv_obj_t *b = make_btn(scr, buf, on_sudoku_digit, digits[i] - '0');
-        lv_obj_set_size(b, 56, 18);
+        lv_obj_set_size(b, 36, 36);
         lv_obj_set_style_bg_color(b, CLR_PRIMARY, 0);
         lv_obj_set_style_bg_color(b, CLR_PRIMARY_D, LV_STATE_PRESSED);
-        lv_obj_set_pos(b, 250, 42 + i * 19);
+        lv_obj_set_pos(b, 195 + (i % 3) * 40, 48 + (i / 3) * 42);
     }
     // DEL and NEW side by side below the keypad.
     lv_obj_t *er = make_btn(scr, "DEL", on_sudoku_erase, 0);
-    lv_obj_set_size(er, 27, 20);
+    lv_obj_set_size(er, 56, 32);
     lv_obj_set_style_bg_color(er, CLR_ERR, 0);
     lv_obj_set_style_bg_color(er, CLR_PRIMARY_D, LV_STATE_PRESSED);
-    lv_obj_set_pos(er, 250, 42 + 9 * 19);
+    lv_obj_set_pos(er, 195, 177);
 
     lv_obj_t *newb = make_btn(scr, "NEW", on_sudoku_new, 0);
-    lv_obj_set_size(newb, 27, 20);
+    lv_obj_set_size(newb, 56, 32);
     lv_obj_set_style_bg_color(newb, CLR_ACCENT, 0);
     lv_obj_set_style_bg_color(newb, CLR_PRIMARY_D, LV_STATE_PRESSED);
-    lv_obj_set_pos(newb, 279, 42 + 9 * 19);
+    lv_obj_set_pos(newb, 255, 177);
 
     // Status message line (below keypad).
     s_sudo_msg = lv_label_create(scr);
     lv_obj_set_style_text_color(s_sudo_msg, CLR_TEXT_DIM, 0);
+    lv_obj_set_style_text_font(s_sudo_msg, &lv_font_montserrat_16, 0);
     lv_obj_align(s_sudo_msg, LV_ALIGN_BOTTOM_LEFT, 12, -4);
 
     // Build the 9x9 board: thin separator lines + cell labels.
@@ -1480,6 +1496,12 @@ static void build_sudoku_screen(void)
             lv_obj_set_pos(cell, px, py);
             lv_obj_set_style_bg_color(cell, CLR_BG, 0);
             lv_obj_set_style_border_width(cell, 0, 0);
+            lv_obj_set_style_pad_all(cell, 0, 0);
+            lv_obj_set_style_radius(cell, 0, 0);
+            lv_obj_set_style_border_width(cell, 1, 0);
+            lv_obj_set_style_border_side(cell, (x % 3 == 0 ? LV_BORDER_SIDE_LEFT : 0) | (y % 3 == 0 ? LV_BORDER_SIDE_TOP : 0), 0);
+            lv_obj_set_style_border_color(cell, CLR_TEXT_DIM, 0);
+            lv_obj_clear_flag(cell, LV_OBJ_FLAG_SCROLLABLE);
             lv_obj_set_user_data(cell, (void *)(intptr_t)(y * 9 + x));
             lv_obj_add_event_cb(cell, on_sudoku_cell, LV_EVENT_CLICKED, NULL);
             s_sudo_cells[y][x] = cell;
@@ -1504,6 +1526,9 @@ static void refresh_sudoku_board(void)
             // Selected highlight / clue background.
             if (x == s_sudoku.sel_x && y == s_sudoku.sel_y) {
                 lv_obj_set_style_bg_color(cell, CLR_PRIMARY_D, 0);
+            } else if (x == s_sudoku.sel_x || y == s_sudoku.sel_y ||
+                       (x / 3 == s_sudoku.sel_x / 3 && y / 3 == s_sudoku.sel_y / 3)) {
+                lv_obj_set_style_bg_color(cell, CLR_PANEL_2, 0);
             } else if (sudoku_is_given(&s_sudoku, x, y)) {
                 lv_obj_set_style_bg_color(cell, CLR_PANEL, 0);
             } else {
@@ -3433,6 +3458,7 @@ static void plan_action_event(lv_event_t *e)
 
 static void on_2048_move_dir(int dir)
 {
+    if (s_game_paused) return;
     if (game2048_move(&s_game2048, dir)) {
         refresh_2048();
     }
@@ -3456,7 +3482,7 @@ static void on_2048_touch(lv_event_t *e)
     if (code == LV_EVENT_PRESSED) {
         s_2048_touch_start = p;
         s_2048_touch_active = true;
-    } else if (code == LV_EVENT_RELEASED && s_2048_touch_active) {
+    } else if ((code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) && s_2048_touch_active) {
         int dx = p.x - s_2048_touch_start.x;
         int dy = p.y - s_2048_touch_start.y;
         s_2048_touch_active = false;
@@ -3473,6 +3499,7 @@ static void build_2048_screen(void)
     style_screen(scr);
     make_title(scr, "2048");
     make_back_btn(scr);
+    game_controls(scr);
 
     s_2048_score = make_label(scr, "Score: 0", 12, 34, CLR_TEXT);
     s_2048_status = make_label(scr, "Swipe to move", 150, 34, CLR_TEXT_DIM);
@@ -3485,6 +3512,7 @@ static void build_2048_screen(void)
     lv_obj_clear_flag(board, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(board, on_2048_touch, LV_EVENT_PRESSED, NULL);
     lv_obj_add_event_cb(board, on_2048_touch, LV_EVENT_RELEASED, NULL);
+    lv_obj_add_event_cb(board, on_2048_touch, LV_EVENT_PRESS_LOST, NULL);
 
     for (int y = 0; y < 4; y++) {
         for (int x = 0; x < 4; x++) {
@@ -3497,10 +3525,12 @@ static void build_2048_screen(void)
             lv_obj_clear_flag(c, LV_OBJ_FLAG_SCROLLABLE);
             lv_obj_add_event_cb(c, on_2048_touch, LV_EVENT_PRESSED, NULL);
             lv_obj_add_event_cb(c, on_2048_touch, LV_EVENT_RELEASED, NULL);
+            lv_obj_add_event_cb(c, on_2048_touch, LV_EVENT_PRESS_LOST, NULL);
             s_2048_cells[y][x] = lv_label_create(c);
             lv_obj_center(s_2048_cells[y][x]);
             lv_obj_set_style_text_color(s_2048_cells[y][x], CLR_TEXT, 0);
             lv_obj_set_style_text_font(s_2048_cells[y][x], &lv_font_montserrat_16, 0);
+            lv_obj_clear_flag(s_2048_cells[y][x], LV_OBJ_FLAG_CLICKABLE);
         }
     }
 
@@ -3508,8 +3538,8 @@ static void build_2048_screen(void)
     int dirs[] = {0, 2, 1, 3};
     for (int i = 0; i < 4; i++) {
         lv_obj_t *b = make_btn(scr, keys[i], on_2048_key, dirs[i]);
-        lv_obj_set_size(b, 65, 26);
-        lv_obj_set_pos(b, 5 + i * 78, 235);
+        lv_obj_set_size(b, 92, 38);
+        lv_obj_set_pos(b, 218, 60 + i * 43);
     }
     refresh_2048();
 }
@@ -3527,8 +3557,16 @@ static void refresh_2048(void)
             if (s_game2048.tile[y][x]) snprintf(t, sizeof(t), "%d", s_game2048.tile[y][x]);
             else strcpy(t, "");
             lv_label_set_text(s_2048_cells[y][x], t);
+            static const uint32_t colors[] = {0x263140, 0xE2E8F0, 0xBAE6FD, 0x7DD3FC, 0x38BDF8,
+                0x34D399, 0xFBBF24, 0xFB923C, 0xF97316, 0xF472B6, 0xC084FC, 0xA78BFA};
+            int level = 0, value = s_game2048.tile[y][x];
+            while (value > 1 && level < 11) { value >>= 1; level++; }
+            lv_obj_set_style_bg_color(lv_obj_get_parent(s_2048_cells[y][x]), lv_color_hex(colors[level]), 0);
+            lv_obj_set_style_text_color(s_2048_cells[y][x], level > 0 && level < 7 ? CLR_BG : CLR_TEXT, 0);
+            lv_obj_center(s_2048_cells[y][x]);
         }
     }
+    label_set_text_if_changed(s_2048_status, game2048_over(&s_game2048) ? "No moves - NEW" : "Swipe / arrows");
 }
 
 // ---------------- FLAPPY screen ----------------
@@ -3536,6 +3574,7 @@ static void on_flappy_tap(lv_event_t *e)
 {
     (void)e;
     if (lv_tick_get() - s_screen_enter_ms < UI_SCREEN_GUARD_MS) return;
+    if (s_game_paused) return;
 
     if (s_flappy.game_over) {
         flappy_init(&s_flappy);
@@ -3551,6 +3590,7 @@ static void build_flappy_screen(void)
     style_screen(scr);
     make_title(scr, "FLAPPY BIRD");
     make_back_btn(scr);
+    game_controls(scr);
 
     s_flappy_score = make_label(scr, "Score: 0", 12, 35, CLR_TEXT);
     s_flappy_status = make_label(scr, "Tap to fly", 156, 35, CLR_TEXT_DIM);
@@ -3561,6 +3601,8 @@ static void build_flappy_screen(void)
     lv_obj_set_pos(s_flappy_board, 10, 54);
     lv_obj_set_size(s_flappy_board, FLAPPY_WORLD_W, FLAPPY_WORLD_H);
     lv_obj_set_style_bg_color(s_flappy_board, lv_color_hex(0xDDF4FF), 0);
+    lv_obj_set_style_bg_grad_color(s_flappy_board, lv_color_hex(0x7DD3FC), 0);
+    lv_obj_set_style_bg_grad_dir(s_flappy_board, LV_GRAD_DIR_VER, 0);
     lv_obj_set_style_bg_opa(s_flappy_board, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_flappy_board, 1, 0);
     lv_obj_set_style_border_color(s_flappy_board, lv_color_hex(0x7DD3FC), 0);
@@ -3659,6 +3701,7 @@ static void flappy_timer_cb(lv_timer_t *t)
 {
     (void)t;
     if (s_screen != SCREEN_FLAPPY) return;
+    if (s_game_paused) return;
     flappy_step(&s_flappy);
     refresh_flappy();
 }
@@ -3691,11 +3734,172 @@ static void refresh_plan_labels(void)
     }
 }
 
+// ---------------- Arcade controls and compact draw-based games ----------------
+static void on_game_pause(lv_event_t *event)
+{
+    if (!click_ok()) return;
+    s_game_paused = !s_game_paused;
+    lv_label_set_text(lv_obj_get_child(s_game_pause_btn, 0), s_game_paused ? "GO" : "II");
+    if (s_arcade_hint) label_set_text_if_changed(s_arcade_hint, s_game_paused ? "PAUSED" : "Swipe / touch to play");
+}
+
+static void on_game_new(lv_event_t *event)
+{
+    if (!click_ok()) return;
+    s_game_paused = false;
+    if (s_screen == SCREEN_SUDOKU) sudoku_new(&s_sudoku, (++s_sudoku_puzzle) % SUDOKU_PUZZLES);
+    else if (s_screen == SCREEN_2048) game2048_init(&s_game2048);
+    else if (s_screen == SCREEN_FLAPPY) flappy_init(&s_flappy);
+    else if (s_screen == SCREEN_SNAKE) snake_init(&s_snake);
+    else if (s_screen == SCREEN_BREAKOUT) breakout_init(&s_breakout);
+    lv_port_post_cmd(UI_CMD_DRAW, 0);
+}
+
+static void game_controls(lv_obj_t *scr)
+{
+    s_game_paused = false;
+    s_game_pause_btn = make_btn(scr, "II", on_game_pause, 0);
+    lv_obj_set_pos(s_game_pause_btn, 144, 4);
+    lv_obj_set_size(s_game_pause_btn, 40, 28);
+    lv_obj_t *button = make_btn(scr, "NEW", on_game_new, 0);
+    lv_obj_set_pos(button, 188, 4);
+    lv_obj_set_size(button, 54, 28);
+}
+
+static void arcade_rect(lv_draw_ctx_t *ctx, int x, int y, int width, int height, uint32_t color, int radius)
+{
+    lv_draw_rect_dsc_t dsc;
+    lv_draw_rect_dsc_init(&dsc);
+    dsc.bg_color = lv_color_hex(color);
+    dsc.radius = radius;
+    lv_area_t area = {x, y, x + width - 1, y + height - 1};
+    lv_draw_rect(ctx, &dsc, &area);
+}
+
+static void on_arcade_draw(lv_event_t *event)
+{
+    lv_draw_ctx_t *ctx = lv_event_get_draw_ctx(event);
+    lv_area_t area;
+    lv_obj_get_content_coords(s_arcade_board, &area);
+    int ox = area.x1, oy = area.y1;
+    if (s_screen == SCREEN_SNAKE) {
+        for (int y = 0; y < SNAKE_ROWS; ++y) for (int x = 0; x < SNAKE_COLS; ++x)
+            arcade_rect(ctx, ox + x * 12, oy + y * 12, 11, 11, (x + y) % 2 ? 0x172330 : 0x14202B, 2);
+        arcade_rect(ctx, ox + s_snake.food % SNAKE_COLS * 12 + 2, oy + s_snake.food / SNAKE_COLS * 12 + 2, 8, 8, 0xFB7185, 4);
+        for (int i = s_snake.length - 1; i >= 0; --i)
+            arcade_rect(ctx, ox + s_snake.body[i] % SNAKE_COLS * 12, oy + s_snake.body[i] / SNAKE_COLS * 12,
+                        11, 11, i ? 0x22C55E : 0xBEF264, 3);
+    } else {
+        static const uint32_t colors[] = {0xFB7185, 0xFBBF24, 0x34D399, 0x38BDF8};
+        for (int row = 0; row < BRICK_ROWS; ++row) for (int col = 0; col < BRICK_COLS; ++col)
+            if (s_breakout.bricks[row][col]) arcade_rect(ctx, ox + 6 + col * 36, oy + 12 + row * 17, 33, 13, colors[row], 3);
+        arcade_rect(ctx, ox + s_breakout.paddle - 24, oy + 134, 48, 7, 0xE2E8F0, 3);
+        arcade_rect(ctx, ox + (int)s_breakout.x - 4, oy + (int)s_breakout.y - 4, 8, 8, 0xFDE68A, 4);
+    }
+}
+
+static void on_arcade_touch(lv_event_t *event)
+{
+    lv_indev_t *input = lv_indev_get_act();
+    if (!input || s_game_paused) return;
+    lv_point_t point;
+    lv_indev_get_point(input, &point);
+    lv_event_code_t code = lv_event_get_code(event);
+    if (code == LV_EVENT_PRESSED) s_arcade_touch = point;
+    if (s_screen == SCREEN_BREAKOUT && (code == LV_EVENT_PRESSED || code == LV_EVENT_PRESSING)) {
+        lv_area_t area;
+        lv_obj_get_content_coords(s_arcade_board, &area);
+        breakout_paddle(&s_breakout, point.x - area.x1);
+        if (code == LV_EVENT_PRESSED && !s_breakout.over) s_breakout.started = true;
+    }
+    if (s_screen == SCREEN_SNAKE && (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST)) {
+        int dx = point.x - s_arcade_touch.x, dy = point.y - s_arcade_touch.y;
+        if (abs(dx) > 10 || abs(dy) > 10) snake_turn(&s_snake, abs(dx) > abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 1 : 0));
+    }
+}
+
+static void on_snake_direction(lv_event_t *event)
+{
+    if (!s_game_paused) snake_turn(&s_snake, (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(event)));
+}
+
+static void arcade_timer_cb(lv_timer_t *timer)
+{
+    if (s_game_paused || !s_arcade_board) return;
+    bool over, won;
+    int score;
+    if (s_screen == SCREEN_SNAKE) {
+        snake_step(&s_snake); score = s_snake.score; over = s_snake.over; won = s_snake.won;
+        lv_timer_set_period(timer, s_snake.score < 100 ? 180 - s_snake.score / 2 : 130);
+    } else if (s_screen == SCREEN_BREAKOUT) {
+        breakout_step(&s_breakout); score = s_breakout.score; over = s_breakout.over; won = s_breakout.won;
+    } else return;
+    char text[48];
+    snprintf(text, sizeof(text), "SCORE %d%s", score, s_screen == SCREEN_BREAKOUT ? "" : "  /  SWIPE");
+    if (s_screen == SCREEN_BREAKOUT) snprintf(text, sizeof(text), "SCORE %d   LIVES %d", score, s_breakout.lives);
+    label_set_text_if_changed(s_arcade_score, text);
+    label_set_text_if_changed(s_arcade_hint, over ? won ? "CLEARED!  NEW to play again" : "GAME OVER  /  NEW to retry" :
+                             s_screen == SCREEN_SNAKE ? "Swipe or use arrows" : s_breakout.started ? "Slide to move paddle" : "Tap to launch");
+    lv_obj_invalidate(s_arcade_board);
+}
+
+static void build_arcade_screen(void)
+{
+    lv_obj_t *scr = lv_scr_act();
+    lv_obj_clean(scr); style_screen(scr);
+    make_title(scr, s_screen == SCREEN_SNAKE ? "SNAKE" : "BREAKOUT");
+    make_back_btn(scr); game_controls(scr);
+    s_arcade_score = make_label(scr, "SCORE 0", 10, 34, CLR_TEXT);
+    s_arcade_board = lv_obj_create(scr);
+    lv_obj_set_pos(s_arcade_board, s_screen == SCREEN_SNAKE ? 16 : 10, 56);
+    lv_obj_set_size(s_arcade_board, s_screen == SCREEN_SNAKE ? 288 : 300, s_screen == SCREEN_SNAKE ? 144 : 158);
+    lv_obj_set_style_pad_all(s_arcade_board, 0, 0);
+    lv_obj_set_style_border_width(s_arcade_board, 0, 0);
+    lv_obj_set_style_bg_color(s_arcade_board, CLR_PANEL, 0);
+    lv_obj_set_style_radius(s_arcade_board, 6, 0);
+    lv_obj_clear_flag(s_arcade_board, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(s_arcade_board, on_arcade_draw, LV_EVENT_DRAW_MAIN, NULL);
+    lv_obj_add_event_cb(s_arcade_board, on_arcade_touch, LV_EVENT_ALL, NULL);
+    s_arcade_hint = make_label(scr, "Swipe / touch to play", 10, 218, CLR_TEXT_DIM);
+    lv_obj_set_style_text_font(s_arcade_hint, &lv_font_montserrat_16, 0);
+    if (s_screen == SCREEN_SNAKE) {
+        lv_obj_add_flag(s_arcade_hint, LV_OBJ_FLAG_HIDDEN);
+        const char *labels[] = {LV_SYMBOL_UP, LV_SYMBOL_DOWN, LV_SYMBOL_LEFT, LV_SYMBOL_RIGHT};
+        for (int i = 0; i < 4; ++i) {
+            lv_obj_t *button = make_btn(scr, labels[i], on_snake_direction, i);
+            lv_obj_set_pos(button, 16 + i * 73, 204); lv_obj_set_size(button, 68, 32);
+        }
+    }
+    if (s_arcade_timer) lv_timer_del(s_arcade_timer);
+    s_arcade_timer = lv_timer_create(arcade_timer_cb, s_screen == SCREEN_SNAKE ? 180 : 30, NULL);
+}
+
 // ---------------- Selected PC window ----------------
 static lv_obj_t *s_screen_image, *s_screen_status;
+static lv_obj_t *s_screen_zoom_btn, *s_screen_music_title;
 static lv_img_dsc_t s_screen_descriptor;
 static int s_touch_x, s_touch_y;
 static bool s_touch_started;
+static int s_screen_zoom = 1;
+static int s_screen_focus_x = PC_SCREEN_W / 2, s_screen_focus_y = PC_SCREEN_H / 2;
+
+static void on_pc_music(lv_event_t *event)
+{
+    static const char *commands[] = {"previous", "play_pause", "next", "volume_down", "volume_up"};
+    int index = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(event));
+    if (index >= 0 && index < (int)(sizeof(commands) / sizeof(commands[0])))
+        pc_screen_command(commands[index]);
+}
+
+static void on_pc_zoom(lv_event_t *event)
+{
+    s_screen_zoom = s_screen_zoom == 1 ? 2 : s_screen_zoom == 2 ? 4 : s_screen_zoom == 4 ? 8 : 1;
+    pc_screen_view(s_screen_zoom, s_screen_focus_x, s_screen_focus_y, false);
+    if (s_screen_zoom_btn) {
+        lv_obj_t *label = lv_obj_get_child(s_screen_zoom_btn, 0);
+        if (label) lv_label_set_text(label, s_screen_zoom == 1 ? "2X" : s_screen_zoom == 2 ? "4X" : s_screen_zoom == 4 ? "8X" : "FIT");
+    }
+}
 
 static void on_pc_touch(lv_event_t *event)
 {
@@ -3703,15 +3907,18 @@ static void on_pc_touch(lv_event_t *event)
     lv_indev_t *input = lv_indev_get_act();
     if (!input) return;
     lv_indev_get_point(input, &point);
-    int x = point.x / 2, y = (point.y - 40) / 2;
+    int x = point.x, y = point.y - 40;
     lv_event_code_t code = lv_event_get_code(event);
     if (code == LV_EVENT_PRESSED) {
-        s_touch_x = x; s_touch_y = y; s_touch_started = true;
+        s_touch_x = x; s_touch_y = y; s_screen_focus_x = x; s_screen_focus_y = y; s_touch_started = true;
     } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
         if (s_touch_started) {
             x = x < 0 ? 0 : x >= PC_SCREEN_W ? PC_SCREEN_W - 1 : x;
             y = y < 0 ? 0 : y >= PC_SCREEN_H ? PC_SCREEN_H - 1 : y;
-            pc_screen_gesture(s_touch_x, s_touch_y, x, y, 0);
+            s_screen_focus_x = x; s_screen_focus_y = y;
+            if (s_screen_zoom > 1 && (abs(x - s_touch_x) > 8 || abs(y - s_touch_y) > 8))
+                pc_screen_view(s_screen_zoom, x - s_touch_x, y - s_touch_y, true);
+            else pc_screen_gesture(s_touch_x, s_touch_y, x, y, 0);
         }
         s_touch_started = false;
     }
@@ -3721,7 +3928,7 @@ static void on_pc_scroll(lv_event_t *event)
 {
     if (!click_ok()) return;
     int wheel = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_target(event));
-    pc_screen_gesture(80, 44, 80, 44, wheel);
+    pc_screen_gesture(PC_SCREEN_W / 2, PC_SCREEN_H / 2, PC_SCREEN_W / 2, PC_SCREEN_H / 2, wheel);
 }
 
 static void refresh_pc_screen(void)
@@ -3739,22 +3946,47 @@ static void build_pc_screen(void)
     lv_obj_t *scr = lv_scr_act();
     lv_obj_clean(scr);
     style_screen(scr);
-    make_title(scr, "PC SCREEN");
-    make_back_btn(scr);
     s_screen_image = NULL;
+    s_screen_zoom_btn = NULL;
+    s_screen_music_title = NULL;
     s_touch_started = false;
-    lv_color_t *pixels = pc_screen_open();
+    s_screen_zoom = 1;
+    s_screen_focus_x = PC_SCREEN_W / 2;
+    s_screen_focus_y = PC_SCREEN_H / 2;
+    uint8_t *pixels = pc_screen_open();
+    char app[16] = "generic", title[96] = "";
+    pc_screen_get_app(app, sizeof(app), title, sizeof(title));
+    make_title(scr, !strcmp(app, "music") ? "NETEASE MUSIC" :
+                    !strcmp(app, "chatgpt") ? "CHATGPT" : "PC SCREEN");
+    make_back_btn(scr);
+    if (!strcmp(app, "music")) {
+        s_screen_music_title = make_label(scr, title[0] ? title : "网易云音乐快捷控制", 8, 52, CLR_TEXT);
+        lv_obj_set_width(s_screen_music_title, 304);
+        lv_label_set_long_mode(s_screen_music_title, LV_LABEL_LONG_DOT);
+        const char *labels[] = {"PREV", "PLAY", "NEXT", "VOL-", "VOL+"};
+        const int positions[][2] = {{10, 96}, {78, 96}, {168, 96}, {10, 150}, {78, 150}};
+        const int sizes[][2] = {{60, 38}, {80, 38}, {60, 38}, {60, 38}, {60, 38}};
+        for (int i = 0; i < 5; ++i) {
+            lv_obj_t *button = make_btn(scr, labels[i], on_pc_music, i);
+            lv_obj_set_pos(button, positions[i][0], positions[i][1]);
+            lv_obj_set_size(button, sizes[i][0], sizes[i][1]);
+        }
+        s_screen_status = make_label(scr, "Selected player controls", 150, 157, CLR_TEXT_DIM);
+        lv_obj_set_width(s_screen_status, 160);
+        refresh_pc_screen();
+        return;
+    }
     if (pixels) {
         memset(&s_screen_descriptor, 0, sizeof(s_screen_descriptor));
-        s_screen_descriptor.header.cf = LV_IMG_CF_TRUE_COLOR;
-        s_screen_descriptor.header.w = PC_SCREEN_W;
-        s_screen_descriptor.header.h = PC_SCREEN_H;
-        s_screen_descriptor.data_size = PC_SCREEN_W * PC_SCREEN_H * sizeof(lv_color_t);
-        s_screen_descriptor.data = (uint8_t *)pixels;
+        s_screen_descriptor.header.cf = LV_IMG_CF_INDEXED_8BIT;
+        s_screen_descriptor.header.w = PC_SCREEN_BUF_W;
+        s_screen_descriptor.header.h = PC_SCREEN_BUF_H;
+        s_screen_descriptor.data_size = 256 * sizeof(lv_color32_t) + PC_SCREEN_BUF_W * PC_SCREEN_BUF_H;
+        s_screen_descriptor.data = pixels;
         s_screen_image = lv_img_create(scr);
         lv_img_set_src(s_screen_image, &s_screen_descriptor);
         lv_img_set_pivot(s_screen_image, 0, 0);
-        lv_img_set_zoom(s_screen_image, 512);
+        lv_img_set_zoom(s_screen_image, (PC_SCREEN_W * 256 + PC_SCREEN_BUF_W / 2) / PC_SCREEN_BUF_W);
         lv_img_set_antialias(s_screen_image, false);
         lv_obj_set_pos(s_screen_image, 0, 40);
         // Use a full-sized transparent target: image zoom does not expand its hitbox.
@@ -3766,9 +3998,12 @@ static void build_pc_screen(void)
         lv_obj_add_event_cb(touch, on_pc_touch, LV_EVENT_ALL, NULL);
     }
     s_screen_status = make_label(scr, "", 3, 220, CLR_TEXT_DIM);
-    lv_obj_set_width(s_screen_status, 224);
+    lv_obj_set_width(s_screen_status, 178);
     lv_obj_set_style_text_font(s_screen_status, &lv_font_montserrat_16, 0);
     lv_label_set_long_mode(s_screen_status, LV_LABEL_LONG_DOT);
+    s_screen_zoom_btn = make_btn(scr, "2X", on_pc_zoom, 0);
+    lv_obj_set_pos(s_screen_zoom_btn, 184, 217);
+    lv_obj_set_size(s_screen_zoom_btn, 42, 23);
     for (int i = 0; i < 2; ++i) {
         lv_obj_t *btn = make_btn(scr, i ? "DN" : "UP", on_pc_scroll, i ? -1 : 1);
         lv_obj_set_pos(btn, 230 + i * 45, 217);
@@ -3794,6 +4029,8 @@ static void do_draw_all(void)
         case SCREEN_SUDOKU:  build_sudoku_screen(); break;
         case SCREEN_2048: build_2048_screen(); break;
         case SCREEN_FLAPPY: build_flappy_screen(); break;
+        case SCREEN_SNAKE:
+        case SCREEN_BREAKOUT: build_arcade_screen(); break;
         case SCREEN_PCMON: build_pcmon_screen(); break;
         case SCREEN_PC_SCREEN: build_pc_screen(); break;
         case SCREEN_INVENTORY: build_inventory_screen(); break;
@@ -3833,6 +4070,9 @@ static void do_set_screen(ui_screen_t scr)
         lv_timer_del(s_flappy_timer);
         s_flappy_timer = NULL;
     }
+    if (s_arcade_timer) { lv_timer_del(s_arcade_timer); s_arcade_timer = NULL; }
+    s_arcade_board = s_arcade_score = s_arcade_hint = s_game_pause_btn = NULL;
+    s_game_paused = false;
     // Any pending calibration-confirm overlay must not survive a screen switch.
     if (s_cal_layer) {
         lv_obj_del(s_cal_layer);

@@ -13,6 +13,7 @@ idf_component_register(
         "sudoku.c"
         "game2048.c"
         "flappy.c"
+        "arcade.c"
         "inventory.c"
         "file_xfer.c"
         "pc_monitor.c"

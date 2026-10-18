@@ -26,6 +26,8 @@ typedef enum {
     SCREEN_SYSTEM_MENU,
     SCREEN_OTHER_MENU,
     SCREEN_PC_SCREEN,
+    SCREEN_SNAKE,
+    SCREEN_BREAKOUT,
 } ui_screen_t;
 
 void ui_init(void);

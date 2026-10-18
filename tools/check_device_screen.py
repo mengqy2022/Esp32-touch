@@ -10,7 +10,7 @@ def main():
     parser.add_argument('--port', default='COM5')
     args = parser.parse_args()
     log = []
-    with serial.Serial(port=None, baudrate=115200, timeout=.1, write_timeout=5) as ser:
+    with serial.Serial(port=None, baudrate=115200, timeout=.1, write_timeout=18) as ser:
         ser.dtr = ser.rts = False
         ser.port = args.port
         ser.open()
@@ -42,7 +42,7 @@ def main():
             assert wait('SCREEN:') == 'SCREEN:READY'
             # Split payload to exercise the streaming decoder, including odd boundaries.
             for offset in range(0, len(payload), 511): ser.write(payload[offset:offset + 511])
-            return wait('SCREEN:', 6)
+            return wait('SCREEN:', 18)
         assert state()[0] == 0, 'Close PC SCREEN before running this check'
         try:
             previous_session = 0
