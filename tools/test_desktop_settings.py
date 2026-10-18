@@ -12,6 +12,19 @@ if sys.platform == 'win32':
 
 @unittest.skipUnless(sys.platform == 'win32', 'Windows control application')
 class DesktopSettingsTests(unittest.TestCase):
+    def test_background_agent_gets_its_own_extraction_after_gui_exits(self):
+        from desktop_dashboard import resume
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'paused').touch()
+            with patch('desktop_dashboard.is_running', return_value=False), \
+                 patch('desktop_dashboard.subprocess.Popen') as launch:
+                resume(root)
+            self.assertFalse((root / 'paused').exists())
+            self.assertEqual(launch.call_args.kwargs['env']['PYINSTALLER_RESET_ENVIRONMENT'], '1')
+            self.assertEqual(launch.call_args.kwargs['env'].get('PATH'), os.environ.get('PATH'))
+
     def test_portable_runtime_uses_existing_config_beside_executable(self):
         from desktop_dashboard import install_root
         import os

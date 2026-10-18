@@ -26,7 +26,7 @@ from pc_screen import Window
 APP_NAME = 'ESP32TouchDashboard'
 RUN_KEY = r'Software\Microsoft\Windows\CurrentVersion\Run'
 APPROVED_KEY = r'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
-APP_VERSION = '2026.10.18.3'
+APP_VERSION = '2026.10.18.4'
 
 
 def choose_screen_window(root):
@@ -453,7 +453,9 @@ def resume(root):
     if not is_running(root):
         subprocess.Popen([str(root / (APP_NAME + '.exe')), '--background'],
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         creationflags=subprocess.CREATE_NO_WINDOW, cwd=root)
+                         creationflags=subprocess.CREATE_NO_WINDOW, cwd=root,
+                         # The background agent must keep its files after the GUI exits.
+                         env=dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT='1'))
 
 
 def install(quiet=False):
@@ -510,6 +512,7 @@ def main():
         Path(args.status).write_text(json.dumps(startup_status(root), ensure_ascii=False, indent=2), encoding='utf-8')
         return
     if args.self_test:
+        from check_window_control import main as check_screen
         from ai_usage import AIUsage
         usage = AIUsage()
         prices = resource_root() / 'codex_prices.json'
@@ -517,7 +520,7 @@ def main():
         for provider in SOURCES:
             tokens, day, cost, label = usage.sample(provider, prices)
             sources[provider] = dict(tokens=tokens, day=day, estimated_cny_fen=cost, label=label)
-        report = dict(sources=sources,
+        report = dict(sources=sources, screen=check_screen(),
                       ports=[p.device for p in serial.tools.list_ports.comports()],
                       models=sorted(set(usage.readers['codex'].by_model) | set(usage.readers['claude'].by_model)),
                       driver=driver_summary(query_ch340()), executable=sys.executable)

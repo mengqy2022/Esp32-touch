@@ -6,7 +6,7 @@ import threading
 import time
 from unittest.mock import patch
 
-from pc_screen import Window, WIDTH, HEIGHT, map_point
+from pc_screen import Window, CaptureProcess, WIDTH, HEIGHT, map_point
 
 
 def main():
@@ -23,17 +23,29 @@ def main():
     u.ShowWindow.argtypes = [w.HWND, ctypes.c_int]
     g.CreateSolidBrush.restype = w.HBRUSH
     u.FillRect.argtypes = [w.HDC, ctypes.POINTER(w.RECT), w.HBRUSH]
+    class Paint(ctypes.Structure):
+        _fields_ = [('dc', w.HDC), ('erase', w.BOOL), ('rect', w.RECT),
+                    ('restore', w.BOOL), ('update', w.BOOL), ('reserved', ctypes.c_byte * 32)]
+    u.BeginPaint.argtypes = [w.HWND, ctypes.POINTER(Paint)]
+    u.BeginPaint.restype = w.HDC
+    u.EndPaint.argtypes = [w.HWND, ctypes.POINTER(Paint)]
+    u.InvalidateRect.argtypes = [w.HWND, ctypes.c_void_p, w.BOOL]
     callback = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, w.HWND, w.UINT, w.WPARAM, w.LPARAM)
     @callback
     def procedure(hwnd, message, wp, lp):
-        if message in (0x317, 0x318):
+        if message in (0xF, 0x317, 0x318):
+            paint = Paint()
+            dc = u.BeginPaint(hwnd, ctypes.byref(paint)) if message == 0xF and not wp else wp
             brush = g.CreateSolidBrush(0x0000ff if not events else 0x00ff00)
             rect = w.RECT(0, 0, 320, 176)
-            u.FillRect(wp, ctypes.byref(rect), brush)
+            u.FillRect(dc, ctypes.byref(rect), brush)
             g.DeleteObject(brush)
+            if message == 0xF and not wp:
+                u.EndPaint(hwnd, ctypes.byref(paint))
             return 0
         if message in (0x201, 0x202, 0x20a):
             events.append((message, wp, lp))
+            u.InvalidateRect(hwnd, None, False)
             return 0
         if message == 0x10:
             u.DestroyWindow(hwnd)
@@ -65,6 +77,7 @@ def main():
     u.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
     target = api.select(dict(hwnd=hwnd, pid=pid.value, title='Test window'))
     report = {}
+    capture = CaptureProcess()
     try:
         for minimized in (False, True):
             u.ShowWindow(hwnd, 6 if minimized else 9)
@@ -74,21 +87,28 @@ def main():
             with patch.object(api.u, 'PrintWindow', return_value=0):
                 before, size = api.capture(target)
             assert any(before[1::2]), 'Unexpected black frame'
+            isolated_before, isolated_size = capture.capture(target, dict(zoom=1, x=.5, y=.5))
+            assert any(isolated_before[1::2]), 'Unexpected black frame from capture process'
+            assert isolated_size == size
             api.gesture(target, size, 80, 40, 200, 120, 0)
             api.gesture(target, size, 160, 88, 160, 88, 1)
             time.sleep(.1)
             with patch.object(api.u, 'PrintWindow', return_value=0):
                 after, _ = api.capture(target)
             assert before != after, 'Click did not change rendered content'
+            isolated_after, _ = capture.capture(target, dict(zoom=1, x=.5, y=.5))
+            assert isolated_before != isolated_after, 'Capture process did not render the changed window'
             assert [e[0] for e in events] == [0x201, 0x202, 0x20a], events
             report['minimized' if minimized else 'visible'] = dict(capture=True, click=True, drag=True,
-                                                                  scroll=True, bytes=len(after), size=size)
+                                                                  scroll=True, capture_process=True, bytes=len(after), size=size)
         print(json.dumps(report, indent=2))
     finally:
+        capture.close()
         u.PostMessageW(hwnd, 0x10, 0, 0)
         thread.join(3)
     assert not api.valid(target), 'Closed window identity accepted'
     print('Closed window identity rejected: PASS')
+    return report
 
 
 if __name__ == '__main__': main()
