@@ -13,6 +13,21 @@ Do not select `esp32s3` without porting and verifying a different board.
 - Tested USB UART bridge: CH340, VID `1A86`, PID `7523`.
 - No implemented battery telemetry and no assumption of external PSRAM.
 
+## PC SCREEN requirements and limits
+
+The current firmware runs on the validated board above without adding PSRAM,
+an SD card or Wi-Fi for PC SCREEN. It requires a USB data cable, a working serial
+driver and the updated Windows companion; the tested board uses CH340 at 115200 baud.
+The application image is 1,590,272 bytes in the supplied 3 MiB application partition.
+
+To fit RAM, the device allocates a 256×140 indexed image plus a 1 KiB palette
+(36 KiB total), while the wire frame is 320×176 RGB332 RLE. This supports low-rate
+window viewing, zoom and touch commands. Full-window small text, smooth video and
+arbitrary minimized/GPU applications are beyond the verified capability; use local
+zoom for text and dedicated media controls for NetEase Cloud Music.
+The current release does not require changing the board. A higher resolution or
+frame-rate goal needs separate memory, display-bus and transport measurements.
+
 ## Pin map
 
 The authoritative source is [main/board_pins.h](../main/board_pins.h).

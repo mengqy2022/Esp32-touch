@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-10-18 PC SCREEN, desktop GUI and games
+
+- Add a persistent dark desktop GUI with Device, PC SCREEN, AI Usage and Settings/Logs pages; search windows by title/process, share, switch and stop from one page.
+- Integrate selected-window viewing and touch control into the existing firmware under SYSTEM → PC SCREEN. Keep the same UART owner for telemetry, frames and input.
+- Increase wire frames to 320×176 RGB332 RLE with HALFTONE downscaling; use a 256×140 indexed device cache to fit ESP32 RAM. Small text still needs zoom.
+- Add 2X/4X/8X zoom centered on the last touched point, zoomed drag to pan, FIT reset and UP/DN scrolling. Taps also send a left click.
+- Add NetEase Cloud Music PREV/PLAY/NEXT/VOL-/VOL+ controls targeting the chosen player; window capture/minimized support remains app dependent.
+- Make window changes reload without reopening the serial port; isolate capture with a timeout and validate window identity to avoid stale targets.
+- Fix EXE **2026.10.18.4** background capture after GUI exit: give the new background process its own PyInstaller extraction lifecycle. The previous shared extraction directory was removed when the launcher exited, causing `_multiprocessing` failures and `Switching window...`.
+- Add Snake and Breakout; improve 2048 swipe/buttons, Sudoku keypad/highlights and Flappy graphics/status; add common pause/resume and new-game controls.
+- Publish the full-system firmware ZIP, flash addresses, checksums and board requirements alongside the companion EXE. Preserve existing NVS when flashing the supplied layout without a whole-chip erase.
+- Verify packaged test-window capture/input, real UART frame validation and ChatGPT display confirmed by the user. Elevated Yomi capture and some minimized/GPU windows remain unsupported or unverified; see [validation](docs/VALIDATION.md).
+
 ### 2026-10-17 dashboard upgrade
 
 - Add CODEX / CLAUDE touch selection on the device, saved in NVS. Stream independent provider caches without overriding selection; retain an acknowledged one-time EXE selection as fallback.
@@ -16,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove AI daily goals and progress bar, retaining a zero protocol slot for older firmware.
 - Apply user-provided GPT and claude-fable-5-1 prices; prefer context_tokens and per-request input for the 272K tier.
 - Migrate legacy default USD prices with backup while preserving custom rates and FX.
+
+### Earlier dashboard baseline (historical)
+
+The entries below describe earlier versions; the dated upgrades above supersede
+their daily-goal, GUI, game and packaging behavior.
 
 ### Added
 

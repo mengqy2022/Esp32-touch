@@ -6,7 +6,8 @@
 [English](README.md) · [文档目录](docs/README.md) · [更新记录](CHANGELOG.md)
 
 本项目把电脑监控和本机 Codex／Claude Code 今日 Token／人民币估算费用直接放在
-320×240 触摸主界面上。小游戏、系统工具、元器件库存和单词实验室通过
+320×240 触摸主界面上，并可投射指定 PC 软件窗口、局部放大及触摸控制。
+小游戏、系统工具、元器件库存和单词实验室通过
 GAME、SYSTEM、OTHER 三个分类进入。Windows 配套 EXE 负责采集与发送数据，
 安装后在用户登录时启动，未插设备时等待，插入后自动连接。
 
@@ -20,10 +21,10 @@ GAME、SYSTEM、OTHER 三个分类进入。Windows 配套 EXE 负责采集与发
 | --- | --- |
 | 主界面 | 日期、星期、Wi-Fi 状态、时钟；CPU/GPU/RAM 圆环、温度、内存用量。闲置时继续显示主页。 |
 | AI 用量卡片 | 在设备主页点选 CODEX／CLAUDE，独立查看今日用量并记住选择；左侧 Token、右侧 `~¥` 人民币估算金额，约每 5 秒更新，无每日限额。 |
-| GAME | SUDOKU 数独、2048、FLAPPY。 |
-| SYSTEM | SD CHECK、SYSTEM INFO、WIFI、CALIBRATE、PC DETAILS。 |
+| GAME | SUDOKU 数独、2048、FLAPPY、SNAKE 贪吃蛇、BREAKOUT 打砖块；统一暂停／继续和重新开始。 |
+| SYSTEM | PC SCREEN、SD CHECK、SYSTEM INFO、WIFI、CALIBRATE、PC DETAILS。 |
 | OTHER | INVENTORY 库存／BOM、VOCAB LAB 本地词书与学习计划、间隔复习、触屏默写。 |
-| Windows EXE | 当前用户安装、登录自启、COM 检查与选择、CH340 驱动检查与安装入口、AI 来源切换、暂停／恢复、价格配置和日志。 |
+| Windows EXE | 深色桌面 GUI：设备连接、PC SCREEN、AI 用量、设置与日志；支持窗口搜索与切换、COM 检查、CH340 驱动检查／安装入口和登录自启。 |
 
 工具的 BACK 返回对应分类，分类的 BACK 返回主页，PC DETAILS 点击返回主页。
 电脑数据需要 PC 配套程序持续运行；离线游戏和本地工具可独立使用。
@@ -34,15 +35,38 @@ GAME、SYSTEM、OTHER 三个分类进入。Windows 配套 EXE 负责采集与发
 1. [下载 ESP32TouchDashboard.exe](https://github.com/mengqy2022/Esp32-touch/raw/refs/heads/main/dist/ESP32TouchDashboard.exe)，
    或按下文自行构建。仓库 [dist 下载说明](dist/README.md)包含 Windows x64 程序与 SHA-256 校验文件。
 2. 把设备接到电脑，确认设备管理器出现串口。测试板使用 CH340，必要时安装对应驱动。
-3. 双击 EXE 并选择安装。无需 Python 或管理员权限，安装在
-   `%LOCALAPPDATA%/ESP32TouchDashboard`，首次安装会启用当前用户登录自启。
-4. 从开始菜单打开 **ESP32 Touch Dashboard**，确认“开机自启：已启用”。
-   此处还可以关闭自启、暂停／恢复、打开价格配置与日志。
+3. 双击 EXE 打开控制中心，在“设备连接”选择端口，点击“连接 / 恢复监控”。
+   无需另装 Python；安装驱动时才需要管理员权限。
+4. 如需安装到当前用户并创建开始菜单入口，运行 `ESP32TouchDashboard.exe --install`；
+   安装沿用当前运行目录并启用登录自启。从非 C 盘首次运行时默认使用 EXE 旁的 `.dashboard`，
+   已有运行目录可继续使用，完整路径规则见软件手册。
 5. 烧录、库存串口操作或使用其他串口工具之前，先暂停监控；完成后恢复。
 
 **自启发生在 Windows 登录后。关闭自启只影响下次登录；暂停则释放当前串口，
-暂停状态会保留到下次登录。** 新电脑上需要安装一次 EXE；本机 Codex 日志不会随设备迁移。
+暂停状态会保留到下次登录。** 新电脑需要自启时请安装一次 EXE；本机 Codex 日志不会随设备迁移。
 完整步骤见 [Windows 软件手册](docs/WINDOWS_APP_CN.md)。
+
+## 本次更新：PC SCREEN 与游戏
+
+这是原有系统的新增功能，保留主页、AI 用量、库存和词书。
+当前配套 EXE 为 **2026.10.18.4**；旧设备需同时更新
+[完整系统固件](dist/PC_SCREEN_FIRMWARE_CN.md)。
+
+1. 在 EXE 左侧进入 **PC SCREEN**，按窗口标题或进程名搜索，双击目标或点击“共享所选窗口”。
+2. 在设备进入 **SYSTEM → PC SCREEN**。切换软件时在 EXE 重新选择即可，无需重开串口；“停止共享”清除选择。
+3. 先轻触想看的位置，再点击放大按钮，依次切换 **2X → 4X → 8X → FIT**；
+   以最后触摸位置为中心，放大后拖动平移，FIT 恢复全图。轻触也会向目标发送左键点击。
+4. **UP / DN** 滚动 ChatGPT 等窗口；选择网易云音乐 `cloudmusic.exe` 后，设备显示
+   **PREV / PLAY / NEXT / VOL- / VOL+** 专用控制按钮。
+
+画面采用 320×176 RGB332 串口帧与节省内存的 256×140 索引缓存。
+整窗缩小仍会损失细字，请使用局部放大；115200 波特率适合低频查看和操作，
+不适合视频。最小化／GPU 窗口的采集和后台触摸响应取决于软件；优先让目标与 Dashboard 均以普通权限运行。
+**2026.10.18.4 修复关闭 GUI 后停在 `Switching window...` 的问题**，关闭控制中心后后台仍继续运行。
+
+GAME 新增贪吃蛇与打砖块；2048 支持滑动／方向键，数独改为大数字键盘并增加行列／宫格高亮，
+Flappy 更新背景和状态显示。各游戏顶部 **II** 暂停、**GO** 继续、**NEW** 重开；数独 NEW 换题。
+具体操作见 [系统功能](docs/HOME_DASHBOARD_CN.md)，实测范围见 [验证记录](docs/VALIDATION.md)。
 
 ## Token 与人民币金额
 
@@ -53,8 +77,9 @@ GAME、SYSTEM、OTHER 三个分类进入。Windows 配套 EXE 负责采集与发
 输出单价分别估算，再换算人民币，显示如 `~¥12.34`。
 默认示例单价由使用者提供，汇率 7.20 可修改，详见 [统计与价格说明](docs/CODEX_USAGE_CN.md)。
 
-统计不等于官方套餐额度、实际账单或跨电脑总用量。程序不会向设备发送对话文本、
-账号凭据或 API Key。缺少有效日志时显示 NO DATA；未知模型／不完整价格时
+统计不等于官方套餐额度、实际账单或跨电脑总用量。AI 用量数据包不会向设备发送对话文本、
+账号凭据或 API Key；启用 PC SCREEN 后会传送所选窗口画面，请留意窗口中的私人内容。
+缺少有效日志时显示 NO DATA；未知模型／不完整价格时
 金额显示 `~¥--`。PC 数据超过 5 秒、Codex 数据超过 90 秒未更新会失效。
 
 ## 开发构建
@@ -95,7 +120,7 @@ python tools/pc_monitor_host.py --port COM5 --codex-prices tools/codex_prices.js
 | [Codex 统计与计价](docs/CODEX_USAGE_CN.md) | 日志口径、默认单价、公式、配置和限制 |
 | [硬件说明](docs/HARDWARE.md) | 芯片目标、屏幕、引脚表 |
 | [架构说明](docs/ARCHITECTURE.md) | 固件与主机模块、数据流、线程规则 |
-| [串口协议](docs/PROTOCOL.md) | PC 遥测与 FILE 文件传输 |
+| [串口协议](docs/PROTOCOL.md) | PC 遥测、SCREEN 画面／触摸与 FILE 文件传输 |
 | [词书说明](docs/VOCABULARY.md) | SD 目录、CSV、学习计划 |
 | [开发指南](docs/DEVELOPMENT.md) | 构建、测试、源码提交与发布 |
 | [验证记录](docs/VALIDATION.md) | 已测试结果与尚未验证的范围 |

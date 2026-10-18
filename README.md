@@ -7,7 +7,8 @@
 [中文说明](README_CN.md) · [Documentation](docs/README.md) · [Changelog](CHANGELOG.md)
 
 A 320×240 touchscreen dashboard with live PC monitoring, local Codex / Claude Code token
-statistics and estimated CNY costs, plus games, system utilities, inventory
+statistics and estimated CNY costs, selected PC window sharing with touch control,
+plus games, system utilities, inventory
 management and an offline vocabulary lab. A small Windows companion application
 installs per user, starts after login and waits for the USB device automatically.
 
@@ -21,10 +22,10 @@ target, pin map and display orientation for this board. Other boards need portin
 | --- | --- |
 | Home | Date, weekday, Wi-Fi status, clock; CPU/GPU/RAM rings, temperatures and RAM usage. Home stays visible when idle. |
 | AI usage | Tap CODEX / CLAUDE on the device to switch independent daily usage; selection survives reboot. Daily tokens on the left, estimated CNY cost on the right. EXE selection remains a fallback. No daily goal. Refreshes about every 5 seconds. |
-| GAME | Sudoku, 2048 and Flappy. |
-| SYSTEM | SD check, system info, Wi-Fi, confirmed touch calibration and PC details. |
+| GAME | Sudoku, 2048, Flappy, Snake and Breakout; pause/resume and restart controls. |
+| SYSTEM | PC SCREEN, SD check, system info, Wi-Fi, confirmed touch calibration and PC details. |
 | OTHER | SD-backed inventory/BOM and Vocab Lab with local wordbooks, study plans, spaced review and touchscreen dictation. |
-| Windows companion | Standalone EXE, COM selection and connection check, CH340 driver diagnostics/installation, AI source selection, login startup, pause/resume, price configuration and rotating logs. |
+| Windows companion | Dark desktop GUI with Device, PC SCREEN, AI Usage and Settings/Logs pages; searchable window selection, COM checks, CH340 diagnostics/installation, login startup and pause/resume. |
 
 PC telemetry requires the companion to run. Games and local utilities remain
 usable independently. GPU data depends on a supported NVIDIA driver; CPU
@@ -33,8 +34,9 @@ after 5 seconds, Codex data after 90 seconds.
 
 Codex usage comes from locally retained session logs. It is not a server billing
 or subscription quota API. Prices are user-supplied configuration, with an
-editable default USD/CNY rate of 7.20. Only aggregate telemetry is sent to the
-device; no prompts or credentials are transmitted.
+editable default USD/CNY rate of 7.20. AI usage packets contain only aggregate
+counts and cost, without prompts or credentials. Enabling PC SCREEN also transmits
+pixels from the selected window, which may contain private information.
 
 ## Windows quick start
 
@@ -43,10 +45,12 @@ device; no prompts or credentials are transmitted.
    also available in [dist/](dist/README.md), with a SHA-256 checksum.
 2. Connect the device. Install its USB serial driver if Windows does not expose a
    COM port; the tested board uses CH340.
-3. Double-click the EXE and accept installation. It installs to
-   `%LOCALAPPDATA%/ESP32TouchDashboard` and enables startup for the current user.
-4. Open **ESP32 Touch Dashboard** from the Start menu to check the startup status,
-   pause/resume monitoring or edit prices. Startup occurs after Windows login.
+3. Double-click the EXE to open the desktop GUI. Select a port on the Device page
+   and choose connect/resume. Python is not required.
+4. For per-user installation and a Start menu shortcut, run
+   `ESP32TouchDashboard.exe --install`. Installation uses the current runtime directory
+   and enables login startup. A first run from a non-C drive uses `.dashboard`
+   beside the EXE by default; see the user guide for directory selection rules.
 
 See the [Windows user guide](docs/WINDOWS_APP_CN.md) for migration, updates,
 removal and troubleshooting. Pause monitoring before flashing or using another
@@ -54,6 +58,31 @@ serial tool.
 
 The [PC SCREEN firmware package and flashing instructions](dist/PC_SCREEN_FIRMWARE_CN.md)
 provide the full system upgrade for the tested ESP32 board, including PC SCREEN and games.
+
+## PC SCREEN and game upgrade — 2026-10-18
+
+Use companion **2026.10.18.4** with the updated firmware. In the GUI's **PC SCREEN**
+page, search by window title/process and double-click a window or select share.
+On the device, open **SYSTEM → PC SCREEN**. Select another window in the GUI to
+switch without reopening the serial port; stop sharing clears the target.
+
+Tap a point, then cycle **2X → 4X → 8X → FIT** to zoom around the last touched
+position. A tap also sends a left click. Drag while zoomed to pan; **UP / DN**
+scroll the target, including ChatGPT. Selecting NetEase Cloud Music
+(`cloudmusic.exe`) shows **PREV / PLAY / NEXT / VOL- / VOL+** controls.
+Version .4 fixes capture stopping at `Switching window...` after the GUI exits;
+the background continues running when the GUI closes.
+
+The wire frame is 320×176 RGB332; the ESP32 uses a 256×140 indexed cache to fit
+available RAM. Small text in a full window still needs zoom. The 115200-baud
+link is for low-rate viewing/control. Minimized/GPU windows and background input
+depend on each app; run the target and Dashboard at matching, ordinary privileges.
+
+Snake and Breakout join Sudoku, 2048 and Flappy. Games have **II / GO** pause/resume
+and **NEW** restart (new puzzle in Sudoku). 2048 supports swipes, Sudoku has a
+larger keypad/highlights, and Flappy has updated visuals/status. See the
+[device guide](docs/HOME_DASHBOARD_CN.md) and [validation record](docs/VALIDATION.md)
+for controls and tested limits.
 
 ## Build from source
 
@@ -85,7 +114,7 @@ python -m pip install -r tools/requirements.txt
 python tools/pc_monitor_host.py --port COM5 --codex-prices tools/codex_prices.json
 ```
 
-The installer, background supervisor and native control dialog are Windows only.
+The installer, background supervisor, desktop GUI and window capture are Windows only.
 
 ## Repository layout
 

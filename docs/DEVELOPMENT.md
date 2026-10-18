@@ -43,9 +43,10 @@ python tools/pc_monitor_host.py --port COM5 --codex-prices tools/codex_prices.js
 ```
 
 The only pip runtime dependency is pyserial 3.5. ctypes/OS providers and the
-optional driver-supplied NVML library are used for monitoring. The legacy inventory
-GUI uses Tkinter; the monitoring EXE does not bundle a GUI framework.
-The installer, agent lock and dialogs are Windows-specific. Linux retains the
+optional driver-supplied NVML library are used for monitoring. Both the inventory
+GUI and the dashboard control center use Tkinter; the EXE bundles Tcl/Tk and does
+not need Electron, Qt or WebView. Packaging Python must include Tkinter.
+The installer, agent lock, window capture and desktop GUI are Windows-specific. Linux retains the
 terminal host path; its behavior was not newly verified on hardware in this update.
 
 ## Windows EXE packaging
@@ -64,11 +65,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build_exe.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build_exe.ps1 -PythonPath C:\Python311\python.exe
 ```
 
-The script creates `.packaging/`, installs `tools/requirements-build.txt`, embeds
-the generic pricing template and builds a onefile, windowless EXE:
+The script creates `packaging-gui/` below WorkRoot, installs
+`tools/requirements-build.txt`, embeds the generic pricing template and builds a
+onefile EXE without a console window. The output is:
 
 ```text
-dist/ESP32TouchDashboard.exe
+<WorkRoot>/output/ESP32TouchDashboard.exe
 ```
 
 pyserial 3.5 and PyInstaller 6.22.3 are pinned to the validated environment.
@@ -76,6 +78,8 @@ Transitive dependencies and the interpreter are not hash-locked; this is version
 pinning, not a guarantee of byte-identical output. Build on the target OS.
 The first build needs network access for dependencies; end users need no Python.
 Do not install the freshly built EXE over a running installation during tests.
+Use `-RuntimeTemp` to embed a non-system-drive extraction location when needed;
+the destination must exist or be creatable on the target computer.
 
 ## Unit checks
 
@@ -87,6 +91,7 @@ python -m unittest discover -s tools -p test_dashboard_agent.py -v
 python -m unittest discover -s tools -p test_ai_usage.py -v
 python -m unittest discover -s tools -p test_device_settings.py -v
 python -m unittest discover -s tools -p test_desktop_settings.py -v
+python -m unittest discover -s tools -p test_pc_screen.py -v
 python -m py_compile tools/codex_usage.py tools/dashboard_agent.py tools/desktop_dashboard.py tools/pc_monitor_host.py
 git diff --check
 ```
@@ -96,6 +101,11 @@ They cover duplicate counters, partial lines, date changes, fork handling,
 archive moves, pricing, long-context fallback and device identity selection.
 Host tests run on Windows and Linux in `.github/workflows/host-tests.yml`.
 These unit tests do not verify native dialogs, actual serial access or Windows login.
+For the packaged Windows capture/input path, run
+`ESP32TouchDashboard.exe --self-test <report-path>` in an interactive desktop session.
+It creates its own test window and checks visible/minimized capture and pointer
+input with the real capture subprocess; it does not verify device rendering or
+compatibility with arbitrary third-party applications. Keep generated reports local.
 
 ## Manual integration checks
 
