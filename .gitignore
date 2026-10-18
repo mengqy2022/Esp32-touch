@@ -15,6 +15,8 @@ recovery/
 !/dist/ESP32TouchDashboard.exe
 !/dist/SHA256SUMS.txt
 !/dist/README.md
+!/dist/ESP32Touch-PC-SCREEN-firmware.zip
+!/dist/PC_SCREEN_FIRMWARE_CN.md
 sdkconfig
 sdkconfig.old
 sdkconfig.*.old

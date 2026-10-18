@@ -3,9 +3,11 @@
 [下载 ESP32TouchDashboard.exe](https://github.com/mengqy2022/Esp32-touch/raw/refs/heads/main/dist/ESP32TouchDashboard.exe)
 · [SHA-256 校验文件](SHA256SUMS.txt)
 · [完整安装与使用手册](../docs/WINDOWS_APP_CN.md)
+· [下载 PC SCREEN 设备固件包](https://github.com/mengqy2022/Esp32-touch/raw/refs/heads/main/dist/ESP32Touch-PC-SCREEN-firmware.zip)
+· [固件烧录说明](PC_SCREEN_FIRMWARE_CN.md)
 
-这是 Windows x64 配套程序，版本为 2026.10.17.2，使用 Python 3.11 和
-PyInstaller 6.22.3，文件大小约 7.52 MiB。首次运行选择安装，无需另装 Python。
+这是 Windows x64 配套程序，版本为 2026.10.18.4，使用 Python 3.11 和
+PyInstaller 6.22.3，文件大小约 12.97 MiB。无需另装 Python。
 安装后登录 Windows 自动等待设备，连接后发送电脑监控和本机 Codex／Claude Code 独立用量数据。
 
 ## 从 GitHub 下载
@@ -40,7 +42,7 @@ Get-FileHash -LiteralPath .\ESP32TouchDashboard.exe -Algorithm SHA256
 仅双击下载的新 EXE 可能打开现有控制窗口，
 不等于替换已安装程序；详见使用手册的更新章节。
 
-本目录只保留发布用 EXE、校验和及说明。临时产物、其他固件、日志、
+本目录保留发布用 EXE、PC SCREEN 完整系统固件 ZIP、校验和及说明。临时产物、其他固件、日志、
 本机配置、个人 Codex 日志和恢复备份不在下载包中。
 
 设备触摸切换依赖配套新固件；旧固件不识别新版的独立来源数据包。

@@ -81,7 +81,7 @@ python -m pip install -r tools/requirements.txt
 python tools/pc_monitor_host.py --port COM5 --codex-prices tools/codex_prices.json
 ```
 
-仓库明确保留 `dist/ESP32TouchDashboard.exe` 与校验文件作为下载包。
+仓库明确保留 `dist/ESP32TouchDashboard.exe`、[PC SCREEN 完整系统固件 ZIP](dist/PC_SCREEN_FIRMWARE_CN.md) 与校验文件作为下载包。
 其他固件／EXE、缓存、依赖环境、Flash 备份、日志和本机设置不提交 Git。
 后续版本也可以放入 GitHub Releases，便于保留版本与下载记录。
 详见 [开发、测试与发布流程](docs/DEVELOPMENT.md)。

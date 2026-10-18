@@ -43,5 +43,10 @@ $dashboardHash = (Get-FileHash -LiteralPath $dashboardExe -Algorithm SHA256).Has
 "$dashboardHash  ESP32TouchDashboard.exe" | Set-Content -LiteralPath $dashboardChecksum -Encoding ascii
 if ($PublishToRepository) {
     Copy-Item -LiteralPath $dashboardExe, $dashboardChecksum -Destination (Join-Path $PSScriptRoot 'dist') -Force
+    Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'dist') -File |
+        Where-Object Name -in @('ESP32TouchDashboard.exe', 'ESP32Touch-PC-SCREEN-firmware.zip') |
+        Sort-Object Name | ForEach-Object {
+            '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
+        } | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'dist/SHA256SUMS.txt') -Encoding ascii
 }
 Write-Output "EXE: $dashboardExe"

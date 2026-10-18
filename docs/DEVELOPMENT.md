@@ -1,7 +1,7 @@
 # Development, testing and publishing
 
 This repository tracks source, generic templates, documentation and an explicitly
-published Windows companion EXE/checksum in `dist/`. Other generated firmware,
+published Windows companion EXE, PC SCREEN full firmware ZIP and checksums in `dist/`. Other generated firmware,
 EXEs and personal machine data stay outside Git. Keep the existing `main/`,
 `tools/` and `docs/` layout to preserve ESP-IDF and script paths.
 
@@ -135,9 +135,11 @@ Include modified `main/`, new host modules/tests, generic price template,
 requirements, scripts, docs and workflow definitions.
 
 The only published build outputs allowed in Git are
-`dist/ESP32TouchDashboard.exe` and `dist/SHA256SUMS.txt`; `dist/README.md` explains
-the download. To update the package, build and verify the EXE, regenerate its
-SHA-256 checksum and commit both together.
+`dist/ESP32TouchDashboard.exe`, `dist/ESP32Touch-PC-SCREEN-firmware.zip` and
+`dist/SHA256SUMS.txt`; `dist/README.md` and `dist/PC_SCREEN_FIRMWARE_CN.md` explain
+the downloads and board-specific flash layout. Verify published files, regenerate
+the SHA-256 checksums and commit them together. Firmware ZIPs contain only build
+outputs, flash arguments, instructions and file checksums; never include a device backup or NVS.
 
 Do not commit `build/`, other `dist/` output, `.packaging/`, `managed_components/`, `recovery/`,
 other EXE/BIN/ELF/MAP files, local SDK configuration, `.log` files, installed LocalAppData

@@ -52,6 +52,9 @@ See the [Windows user guide](docs/WINDOWS_APP_CN.md) for migration, updates,
 removal and troubleshooting. Pause monitoring before flashing or using another
 serial tool.
 
+The [PC SCREEN firmware package and flashing instructions](dist/PC_SCREEN_FIRMWARE_CN.md)
+provide the full system upgrade for the tested ESP32 board, including PC SCREEN and games.
+
 ## Build from source
 
 Firmware, in an ESP-IDF 5.5.4 environment:
@@ -98,7 +101,7 @@ stop_dashboard.ps1     Pause monitoring and release the serial port
 ```
 
 Git contains source, generic configuration, documentation and the explicitly
-published Windows companion EXE with its checksum. Other generated firmware/EXEs,
+published Windows companion EXE, PC SCREEN full firmware ZIP and checksums. Other generated firmware/EXEs,
 build environments, recovery images and local runtime data are excluded.
 The manual Windows workflow produces a downloadable Actions artifact;
 it does not automatically publish a GitHub Release.
