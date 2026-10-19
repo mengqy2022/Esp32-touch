@@ -70,3 +70,7 @@ Get-FileHash -LiteralPath .\ESP32TouchDashboard.exe -Algorithm SHA256
 设备触摸切换依赖配套新固件；旧固件不识别新版的独立来源数据包。
 WCH 的下载页面校验可能阻止自动下载，此时可从官方页面手动下载后选本地安装。
 驱动安装验证发布者签名并请求 Windows 管理员权限，本次没有实际安装驱动。
+
+### Windows temporary-directory compatibility
+
+The bundled `ESP32TouchDashboard.exe` uses `%TEMP%` for PyInstaller extraction instead of a developer-specific `F:` path. It should therefore start on PCs without an `F:` drive, provided the current user's Windows temporary directory is writable. Future builds leave `-RuntimeTemp` unset by default.
