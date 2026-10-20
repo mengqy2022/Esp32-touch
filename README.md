@@ -38,6 +38,24 @@ editable default USD/CNY rate of 7.20. AI usage packets contain only aggregate
 counts and cost, without prompts or credentials. Enabling PC SCREEN also transmits
 pixels from the selected window, which may contain private information.
 
+## Device screens
+
+| Home: PC monitoring and AI usage | GAME: five offline games |
+| --- | --- |
+| ![Home dashboard](docs/images/device/home.png) | ![GAME menu](docs/images/device/game.png) |
+| SYSTEM: device and connection tools | OTHER: salary, inventory and vocabulary |
+| ![SYSTEM menu](docs/images/device/system.png) | ![OTHER menu](docs/images/device/other.png) |
+
+Tap a category at the bottom of Home to open it; BACK returns from a tool to its
+category and from a category to Home. Tap CODEX / CLAUDE on the device to select
+independent usage. Salary Cat is under **OTHER → SALARY CAT**.
+The [illustrated device guide (Chinese)](docs/HOME_DASHBOARD_CN.md) explains entry
+points, game controls and tool requirements, including PC SCREEN.
+
+These are 320×240 screenshots rendered offscreen from the actual current LVGL
+page code with fixed sample data, not device photos. See [image provenance](docs/images/device/README.md)
+for capture scope. They illustrate the source; published binary versions are listed separately in the download guide.
+
 ## Salary Cat
 
 The 2026-10-20 source adds [Salary Cat](docs/SALARY_CAT_CN.md) under **OTHER → SALARY CAT**:

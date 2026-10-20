@@ -8,7 +8,7 @@
 
 | 面向 | 文档 | 内容 |
 | --- | --- | --- |
-| 设备用户 | [系统功能](HOME_DASHBOARD_CN.md) | 主页、菜单、游戏、工具、数据显示 |
+| 设备用户 | [系统图文说明](HOME_DASHBOARD_CN.md) | 主页、GAME、SYSTEM、OTHER 截图与操作；设备切换 Codex／Claude 示例 |
 | 薪资工具 | [月薪猫](SALARY_CAT_CN.md) | 动态猫咪、工资进度、设备设置、调休规则与开机页 |
 | Windows 用户 | [EXE 手册](WINDOWS_APP_CN.md) | GUI、窗口切换、放大中心、快捷控制、安装与排障 |
 | 下载／升级 | [下载包](../dist/README.md) / [固件烧录](../dist/PC_SCREEN_FIRMWARE_CN.md) | EXE、完整系统固件、校验值、适用硬件与写入地址 |

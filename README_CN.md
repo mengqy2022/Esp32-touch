@@ -30,6 +30,22 @@ GAME、SYSTEM、OTHER 三个分类进入。Windows 配套 EXE 负责采集与发
 电脑数据需要 PC 配套程序持续运行；离线游戏和本地工具可独立使用。
 温度／GPU 读取依赖电脑硬件与驱动，不支持的数据显示 `--`。
 
+## 设备界面与操作图解
+
+| 主页：电脑监控与 AI 用量 | GAME：五款离线游戏 |
+| --- | --- |
+| ![主页](docs/images/device/home.png) | ![GAME 游戏分类](docs/images/device/game.png) |
+| SYSTEM：设备与连接工具 | OTHER：月薪猫、库存与词书 |
+| ![SYSTEM 系统分类](docs/images/device/system.png) | ![OTHER 工具分类](docs/images/device/other.png) |
+
+在主页底部点分类名称进入，分类右上角 **BACK** 返回主页；工具内的 **BACK** 返回所属分类。
+直接在设备主页点 **CODEX / CLAUDE** 切换各自用量。进入 **OTHER → SALARY CAT** 打开月薪猫。
+完整入口、五款游戏操作和各工具要求见 [系统图文说明](docs/HOME_DASHBOARD_CN.md)。
+
+配图由当前固件的实际 LVGL 页面代码离屏渲染，原始尺寸 320×240，使用固定示例数据，
+非实物照片；[图片说明](docs/images/device/README.md)记录采集方式和范围。
+图片展示当前源码，下载包版本以下载说明为准。
+
 ## EXE 快速使用
 
 1. [下载 ESP32TouchDashboard.exe](https://github.com/mengqy2022/Esp32-touch/raw/refs/heads/main/dist/ESP32TouchDashboard.exe)，

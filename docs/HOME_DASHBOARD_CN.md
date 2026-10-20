@@ -5,7 +5,24 @@ PC 采集电脑状态和本机 Codex／Claude Code 用量，经 USB 串口发送
 启用 PC SCREEN 后还会发送指定软件窗口的画面并接收触摸操作。
 主界面使用 LVGL 控件，沿用 320×240 横屏布局，不依赖联网下载图片。
 
+## 界面总览
+
+| 主页：监控与 AI 用量 | GAME：五款离线游戏 |
+| --- | --- |
+| ![主页，含 CPU、GPU、RAM 与 Codex 用量](images/device/home.png) | ![GAME 分类的五款游戏入口](images/device/game.png) |
+| SYSTEM：连接与设备工具 | OTHER：薪资、库存与学习 |
+| ![SYSTEM 分类的六个工具入口](images/device/system.png) | ![OTHER 分类的三个功能入口](images/device/other.png) |
+
+以上为 **2026-10-20 当前源码的 320×240 LVGL 软件渲染截图，非实物照片**。
+页面布局、字体和颜色取自固件，日期、电脑状态、Token 与金额使用固定示例数据，
+不代表个人用量或设备实时状态。截图生成方式见 [图片说明](images/device/README.md)。
+仓库下载包仍为此前版本，功能是否已包含请先查看 [下载说明](../dist/README.md)。
+
 ## 主界面
+
+开机默认进入主页。先看顶栏日期／时钟与 PC ONLINE 状态，再看三个使用率圆环；
+底部点 **GAME / SYSTEM / OTHER** 进入对应分类。没有配套程序或传感器数据时显示 `--`，
+不影响打开设备本地功能。
 
 | 区域 | 显示与交互 | 数据来源 |
 | --- | --- | --- |
@@ -21,6 +38,12 @@ PC 采集电脑状态和本机 Codex／Claude Code 用量，经 USB 串口发送
 
 ### AI 用量卡片
 
+![设备主页选中 CLAUDE 后独立显示用量与金额](images/device/home-claude.png)
+
+**切换在设备上完成**：轻触 `CODEX` 或 `CLAUDE`，青色按钮表示当前来源。
+上图演示 Claude 的 `64.0k tokens` 与 `~¥5.67`；总览图演示 Codex 的
+`128.0k tokens` 与 `~¥12.34`。两组均为独立示例，不是合并统计。
+
 - 今日 Token 按电脑本地日历日期统计，`k` 表示千个 Token。
 - 总计是输入＋输出，缓存输入已包含在输入里；详细口径见
   [统计与价格](CODEX_USAGE_CN.md)。
@@ -33,6 +56,9 @@ PC 采集电脑状态和本机 Codex／Claude Code 用量，经 USB 串口发送
 - 没有有效本机日志、数据过期或日期不一致时，Token 与金额显示 `--`。
 
 ## GAME：游戏
+
+**入口：主页 → GAME。** 分类图中上排为 SUDOKU、2048，中排为 FLAPPY、SNAKE，
+下排为 BREAKOUT；点名称进入游戏，右上角 **BACK** 从分类返回主页。
 
 | 功能 | 操作与说明 |
 | --- | --- |
@@ -47,6 +73,10 @@ PC 采集电脑状态和本机 Codex／Claude Code 用量，经 USB 串口发送
 逻辑检查已通过，尚未对每款游戏完成实体触摸与画面验收。
 
 ## SYSTEM：系统工具
+
+**入口：主页 → SYSTEM。** 分类图按三排排列：SD 与系统信息、Wi-Fi 与触摸校准、
+PC 详细监控与 PC SCREEN。点工具名称进入，**BACK** 返回所属分类。
+其中 PC SCREEN 需要先在电脑 EXE 选择共享窗口；选择 CALIBRATE 后还需确认才会校准。
 
 | 功能 | 作用 |
 | --- | --- |
@@ -73,6 +103,10 @@ PC 采集电脑状态和本机 Codex／Claude Code 用量，经 USB 串口发送
 完整操作、权限与黑屏排查见 [Windows 软件手册](WINDOWS_APP_CN.md)。
 
 ## OTHER：数据与学习工具
+
+**入口：主页 → OTHER。** 分类图上排为 INVENTORY 库存和 VOCAB LAB 学习，
+下排为新增的 **SALARY CAT** 月薪猫；点名称进入，右上角 **BACK** 返回主页。
+月薪猫不需要 SD 卡；库存和本地词书需要准备对应 SD 数据。
 
 ### SALARY CAT
 

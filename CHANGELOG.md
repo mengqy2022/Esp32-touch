@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-10-20 illustrated device guide
+
+- Add five 320×240 screenshots rendered from current LVGL UI code: Home, GAME, SYSTEM, OTHER and the on-device Claude selection. Use synthetic telemetry and usage; document capture provenance and limits.
+- Add four-page galleries to both READMEs and expand the Chinese system guide with navigation, entry points and matching control descriptions. Published binaries are unchanged.
+
 ### 2026-10-20 Salary Cat
 
 - Add OTHER → SALARY CAT with weekday cat animations, scheduled work time, next shift/break/end countdown and tap-to-switch daily/monthly/annual estimates.
