@@ -14,6 +14,10 @@ idf_component_register(
         "game2048.c"
         "flappy.c"
         "arcade.c"
+        "salary.c"
+        "salary_store.c"
+        "salary_ui.c"
+        "font_salary16.c"
         "inventory.c"
         "file_xfer.c"
         "pc_monitor.c"
@@ -21,6 +25,7 @@ idf_component_register(
         "vocabulary.c"
         "font_cn16.c"
     INCLUDE_DIRS "."
+    EMBED_FILES "salary_cat.rle"
     REQUIRES esp_driver_gpio esp_driver_spi esp_driver_sdspi esp_driver_uart fatfs sdmmc nvs_flash esp_timer
              esp_wifi esp_netif esp_event spi_flash
              lvgl__lvgl esp_http_client mbedtls json

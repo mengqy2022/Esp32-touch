@@ -32,7 +32,18 @@ The name is mentioned only as the user's product-reference point for learning wo
 
 If you plan to publish or commercially redistribute the repository, independently verify that you have redistribution rights for the embedded glyph data. A conservative future improvement is to regenerate this C table from an openly licensed CJK typeface (for example an OFL-licensed Noto CJK font) and retain that font's required license notice.
 
-## Project-level license
+## Salary Cat artwork and font
+
+The five GIFs in `assets/salary_cat/` were supplied by the device user. Retain their
+original markings; this does not assign artwork rights or place them under the
+project's MIT code license. See [asset notes](../assets/salary_cat/README.md).
+The new salary-only `font_salary16.c` is a Noto Sans SC subset, copyright Adobe,
+under [SIL OFL 1.1](../assets/salary_cat/OFL.txt). It does not replace the existing CJK font.
+
+The 2026 calendar references the linked government notice in `tools/work_calendar.json`;
+the host does not fetch a holiday service at runtime or read personal calendar events.
+
+## Project-level license (code)
 
 The repository already contains an [MIT LICENSE](../LICENSE); it is retained by
 this update. Its copyright attribution still contains a placeholder and should

@@ -92,6 +92,7 @@ python -m unittest discover -s tools -p test_ai_usage.py -v
 python -m unittest discover -s tools -p test_device_settings.py -v
 python -m unittest discover -s tools -p test_desktop_settings.py -v
 python -m unittest discover -s tools -p test_pc_screen.py -v
+python -m unittest discover -s tools -p test_work_calendar.py -v
 python -m py_compile tools/codex_usage.py tools/dashboard_agent.py tools/desktop_dashboard.py tools/pc_monitor_host.py
 git diff --check
 ```
@@ -101,6 +102,13 @@ They cover duplicate counters, partial lines, date changes, fork handling,
 archive moves, pricing, long-context fallback and device identity selection.
 Host tests run on Windows and Linux in `.github/workflows/host-tests.yml`.
 These unit tests do not verify native dialogs, actual serial access or Windows login.
+Salary logic can be checked without ESP-IDF: compile `main/salary.c` and
+`tools/test_salary.c` with `-std=c11 -Wall -Wextra -Werror -I main`, output to a local
+build/temp directory and run it. This covers time boundaries, work/rest overrides,
+monthly totals, leap dates, integer limits and rejected calendar packets.
+`tools/work_calendar.py --firmware-header main/salary_calendar_default.h` regenerates
+the bundled firmware calendar from the same JSON as the host. Asset/font conversion
+commands and provenance are in [salary assets](../assets/salary_cat/README.md).
 For the packaged Windows capture/input path, run
 `ESP32TouchDashboard.exe --self-test <report-path>` in an interactive desktop session.
 It creates its own test window and checks visible/minimized capture and pointer

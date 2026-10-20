@@ -1,6 +1,11 @@
 #include "file_xfer.h"
 #include "pc_monitor.h"
 #include "pc_screen.h"
+#include "salary_store.h"
+#include "salary_ui.h"
+#include "ui.h"
+#include "net_utils.h"
+#include "esp_system.h"
 
 #include <dirent.h>
 #include <stdarg.h>
@@ -232,6 +237,15 @@ static void xfer_task(void *arg)
                 }
             } else if (strncmp(line, "SCREEN:", 7) == 0) {
                 pc_screen_handle_line(line + 7);
+            } else if (strncmp(line, "SALARY:", 7) == 0) {
+                if (!strcmp(line + 7, "OPEN")) ui_set_screen(SCREEN_SALARY);
+                else if (!strcmp(line + 7, "CLOSE")) ui_set_screen(SCREEN_OTHER_MENU);
+                else if (!strcmp(line + 7, "?"))
+                    send_line("SALARY:STATE|%d|%d|%u|%u", ui_get_screen() == SCREEN_SALARY, net_time_synced(), (unsigned)esp_get_free_heap_size(), (unsigned)salary_ui_rendered_frames());
+                else {
+                    esp_err_t result = salary_store_calendar(line + 7);
+                    send_line(result == ESP_OK ? "SALARY:OK" : "SALARY:ERR|calendar");
+                }
             } else if (strncmp(line, "PC:", 3) == 0) {
                 // PC Monitor telemetry (time sync + CPU/GPU/MEM feed).
                 pc_monitor_handle_line(line + 3);

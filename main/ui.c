@@ -11,6 +11,8 @@
 #include "game2048.h"
 #include "flappy.h"
 #include "arcade.h"
+#include "salary_ui.h"
+#include "salary_store.h"
 #include "wifi_mgr.h"
 #include "vocabulary.h"
 #include "xpt2046.h"
@@ -512,6 +514,7 @@ static void on_menu_btn(lv_event_t *e)
         case 13: lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_PC_SCREEN); break;
         case 14: snake_init(&s_snake); lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_SNAKE); break;
         case 15: breakout_init(&s_breakout); lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_BREAKOUT); break;
+        case 16: lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_SALARY); break;
         default: break;
     }
 }
@@ -729,9 +732,9 @@ static void build_category_screen(void)
     }, systems[] = {
         {"SD CHECK", 0}, {"SYSTEM INFO", 1}, {"WIFI", 2}, {"CALIBRATE", 3}, {"PC DETAILS", 9}, {"PC SCREEN", 13}
     }, others[] = {
-        {"INVENTORY", 5}, {"VOCAB LAB", 6}
+        {"INVENTORY", 5}, {"VOCAB LAB", 6}, {"SALARY CAT", 16}
     };
-    int n = game ? 5 : system ? 6 : 2;
+    int n = game ? 5 : system ? 6 : 3;
     lv_color_t accent = game ? CLR_OK : system ? lv_color_hex(0x24D4EA) : lv_color_hex(0xFB923C);
     for (int i = 0; i < n; ++i) {
         const char *label = game ? games[i].label : system ? systems[i].label : others[i].label;
@@ -4033,6 +4036,7 @@ static void do_draw_all(void)
         case SCREEN_BREAKOUT: build_arcade_screen(); break;
         case SCREEN_PCMON: build_pcmon_screen(); break;
         case SCREEN_PC_SCREEN: build_pc_screen(); break;
+        case SCREEN_SALARY: salary_ui_build(); break;
         case SCREEN_INVENTORY: build_inventory_screen(); break;
         case SCREEN_VOCAB: build_vocab_screen(); break;
         case SCREEN_VOCAB_BOOKS: build_vocab_books_screen(); break;
@@ -4060,6 +4064,7 @@ static void do_update_status(void)
 
 static void do_set_screen(ui_screen_t scr)
 {
+    if (s_screen == SCREEN_SALARY) salary_ui_leave();
     if (s_screen == SCREEN_PC_SCREEN) {
         lv_obj_clean(lv_scr_act());
         lv_img_cache_invalidate_src(&s_screen_descriptor);
@@ -4081,6 +4086,7 @@ static void do_set_screen(ui_screen_t scr)
     if (scr != SCREEN_VOCAB_BOOKS) s_vocab_books_notice[0] = '\0';
     if (scr == SCREEN_MENU) s_menu_parent = SCREEN_MENU;
     else if (scr == SCREEN_GAME_MENU || scr == SCREEN_SYSTEM_MENU || scr == SCREEN_OTHER_MENU) s_menu_parent = scr;
+    else if (scr == SCREEN_SALARY) s_menu_parent = SCREEN_OTHER_MENU;
     s_screen = scr;
     s_wifi_sel = -1;
     s_last_wifi_state = (wifi_state_t)-1;
@@ -4174,7 +4180,9 @@ void ui_init(void)
     s_last_wifi_state = (wifi_state_t)-1;
     s_last_click_ms = 0;
     s_screen_enter_ms = 0;
-    lv_port_post_cmd(UI_CMD_SCREEN, SCREEN_MENU);
+    salary_data_t salary;
+    salary_store_snapshot(&salary);
+    lv_port_post_cmd(UI_CMD_SCREEN, salary.config.boot_cat ? SCREEN_SALARY : SCREEN_MENU);
 }
 
 ui_screen_t ui_get_screen(void) { return s_screen; }

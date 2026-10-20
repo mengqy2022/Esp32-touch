@@ -24,7 +24,7 @@ target, pin map and display orientation for this board. Other boards need portin
 | AI usage | Tap CODEX / CLAUDE on the device to switch independent daily usage; selection survives reboot. Daily tokens on the left, estimated CNY cost on the right. EXE selection remains a fallback. No daily goal. Refreshes about every 5 seconds. |
 | GAME | Sudoku, 2048, Flappy, Snake and Breakout; pause/resume and restart controls. |
 | SYSTEM | PC SCREEN, SD check, system info, Wi-Fi, confirmed touch calibration and PC details. |
-| OTHER | SD-backed inventory/BOM and Vocab Lab with local wordbooks, study plans, spaced review and touchscreen dictation. |
+| OTHER | Salary Cat, SD-backed inventory/BOM and Vocab Lab with local wordbooks, study plans, spaced review and touchscreen dictation. |
 | Windows companion | Dark desktop GUI with Device, PC SCREEN, AI Usage and Settings/Logs pages; searchable window selection, COM checks, CH340 diagnostics/installation, login startup and pause/resume. |
 
 PC telemetry requires the companion to run. Games and local utilities remain
@@ -37,6 +37,25 @@ or subscription quota API. Prices are user-supplied configuration, with an
 editable default USD/CNY rate of 7.20. AI usage packets contain only aggregate
 counts and cost, without prompts or credentials. Enabling PC SCREEN also transmits
 pixels from the selected window, which may contain private information.
+
+## Salary Cat
+
+The 2026-10-20 source adds [Salary Cat](docs/SALARY_CAT_CN.md) under **OTHER → SALARY CAT**:
+a monochrome dashboard with transparent animated weekday cats, scheduled earnings,
+work-time/countdown, on-device salary/shift/workday settings, manual date overrides,
+a 2026 China holiday calendar and optional boot page. Tap the amount to cycle daily,
+monthly and annual estimates. October 2026 has **18 workdays**, including the Saturday
+makeup workday on October 10; October 1–7 are holidays.
+It estimates scheduled time, requires a valid clock and does not record attendance.
+See the download/validation documents for published binary versions and tested scope.
+
+![Salary Cat animated dashboard](docs/images/salary-cat/animated-dashboard.gif)
+
+The image above captures the actual LVGL page rendered offscreen at 320×240 using
+sample data (CNY 6,000/month, 09:00–12:00 and 14:00–17:00). It is not a device photo.
+[Screenshots and controls](docs/SALARY_CAT_CN.md#关键界面截图) cover earnings, settings,
+date overrides and makeup workdays; [image provenance](docs/images/salary-cat/README.md)
+explains the capture method.
 
 ## Windows quick start
 

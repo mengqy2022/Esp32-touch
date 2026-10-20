@@ -34,6 +34,7 @@ if ($RuntimeTemp) {
 }
 & $dashboardPython -m PyInstaller --noconfirm --clean --onefile --noconsole @dashboardRuntimeOptions `
   --name ESP32TouchDashboard --add-data "$PSScriptRoot/tools/codex_prices.json;." `
+  --add-data "$PSScriptRoot/tools/work_calendar.json;." `
   --paths tools --distpath $dashboardOutput --workpath (Join-Path $dashboardBuild 'packaging') `
   --specpath $dashboardBuild tools/desktop_dashboard.py
 if ($LASTEXITCODE -ne 0) { throw 'EXE build failed.' }

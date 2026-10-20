@@ -4,10 +4,14 @@ on:
   push:
     paths:
       - 'tools/**'
+      - 'main/salary*'
+      - 'main/font_salary16.c'
       - '.github/workflows/host-tests.yml'
   pull_request:
     paths:
       - 'tools/**'
+      - 'main/salary*'
+      - 'main/font_salary16.c'
       - '.github/workflows/host-tests.yml'
   workflow_dispatch:
 
@@ -35,3 +39,6 @@ jobs:
       - run: python -m unittest discover -s tools -p test_device_settings.py -v
       - run: python -m unittest discover -s tools -p test_desktop_settings.py -v
       - run: python -m unittest discover -s tools -p test_pc_screen.py -v
+      - run: python -m unittest discover -s tools -p test_work_calendar.py -v
+      - if: runner.os == 'Linux'
+        run: gcc -std=c11 -Wall -Wextra -Werror -I main main/salary.c tools/test_salary.c -o "$RUNNER_TEMP/test_salary" && "$RUNNER_TEMP/test_salary"

@@ -36,6 +36,9 @@ flowchart LR
 | `main/file_xfer.c` | Sole console UART reader; dispatches PC, SCREEN and FILE transfers. |
 | `main/pc_screen.c`, `pc_screen.h` | SCREEN session/validation, 320×176 wire frames, 256×140 indexed cache, input replies. |
 | `main/arcade.c`, `arcade.h` | Snake and Breakout game state and rules; UI integrates them with Sudoku, 2048 and Flappy. |
+| `main/salary.c`, `salary.h` | Pure integer-fen scheduled earnings, dates, weekly/calendar/manual precedence and bounded calendar parser. |
+| `main/salary_store.c`, `salary_store.h` | Mutex-protected snapshots and validated changes in separate `salary_cat` NVS keys; full-year calendar staging. |
+| `main/salary_ui.c`, `salary_ui.h` | On-device settings, optional boot page and only-on-page RLE animation buffer/timer; no takeover of other screens. |
 | `main/net_utils.c` | USB/Wi-Fi time sync, timezone and time source tracking. |
 | `main/sd_monitor.c` | SD lifecycle and scan/check operations. |
 | `main/wifi_mgr.c` | Scan, connect, stored credentials and reconnect. |
@@ -68,6 +71,7 @@ The yen sign uses a tiny dedicated glyph rather than a large additional font.
 | `tools/ai_usage.py` | Claude Code cache-aware usage, duplicate assistant-message snapshots, independent Codex/Claude selection. |
 | `tools/device_settings.py` | Validated settings, PnP diagnostics including missing-driver devices, signed vendor installer/UAC. |
 | `tools/pc_screen.py` | Window identity, isolated capture with timeout, crop/zoom mapping, RGB332 RLE and targeted input/media messages. |
+| `tools/work_calendar.py`, `work_calendar.json` | Validated annual exception table and periodic SALARY packets on the existing UART; no network or personal calendar access. |
 
 The background supervisor runs its telemetry worker in a Python thread, avoiding a
 second Python telemetry subprocess. Window capture uses its own isolated process.

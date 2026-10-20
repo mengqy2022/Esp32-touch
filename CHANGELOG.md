@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-10-20 Salary Cat
+
+- Add OTHER → SALARY CAT with weekday cat animations, scheduled work time, next shift/break/end countdown and tap-to-switch daily/monthly/annual estimates.
+- Use a monochrome instrument panel with white earnings, gray outlines and grayscale transparent cats playing continuously while open, including lunch and evenings. Remove the supplied GIFs' edge-connected white background and separate pale watermark in the generated display assets; preserve originals.
+- Add on-device monthly salary, two shifts, weekly schedule, date overrides (32 entries), China holiday toggle and optional boot page; preserve the original home default.
+- Use integer fen, lunch exclusion and daily/monthly limits; reconstruct progress from valid local time and schedule, without per-second Flash writes or attendance tracking.
+- Keep settings in a separate NVS namespace; release the 13,568-byte animation buffer and timer on exit. Convert the five supplied GIFs to 112×112 RGB332 RLE; add an OFL Noto Chinese subset for this page only.
+- Bundle the 2026 China holiday/makeup calendar in firmware and host. Add validated JSON import in the desktop GUI and periodic full-year UART sync, with manual date overrides taking priority and explicit unknown-year fallback.
+- Add core C calculation checks and host checks for calendar validation, firmware agreement, RLE frames and page font coverage; retain existing host regressions.
+- Document the monochrome UI, salary formulas and October 10 makeup workday (18 October workdays). Add eight screenshots rendered from the actual LVGL page plus an animated dashboard preview, with image provenance and per-control captions.
+
 ### 2026-10-18 PC SCREEN, desktop GUI and games
 
 - Add a persistent dark desktop GUI with Device, PC SCREEN, AI Usage and Settings/Logs pages; search windows by title/process, share, switch and stop from one page.

@@ -26,7 +26,7 @@ from pc_screen import Window
 APP_NAME = 'ESP32TouchDashboard'
 RUN_KEY = r'Software\Microsoft\Windows\CurrentVersion\Run'
 APPROVED_KEY = r'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
-APP_VERSION = '2026.10.18.4'
+APP_VERSION = '2026.10.20.1'
 
 
 def choose_screen_window(root):

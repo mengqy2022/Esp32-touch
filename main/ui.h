@@ -28,6 +28,7 @@ typedef enum {
     SCREEN_PC_SCREEN,
     SCREEN_SNAKE,
     SCREEN_BREAKOUT,
+    SCREEN_SALARY,
 } ui_screen_t;
 
 void ui_init(void);

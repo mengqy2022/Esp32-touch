@@ -43,6 +43,7 @@ from pathlib import Path
 
 from ai_usage import AIUsage, SOURCES, ai_packet
 from pc_screen import Mirror
+from work_calendar import CalendarSync
 
 IS_WINDOWS = platform.system() == "Windows"
 
@@ -407,6 +408,8 @@ def main(argv=None, stop_event=None):
     started = time.monotonic()
     mirror = Mirror(args.screen_window)
     screen_config = Path(args.screen_config) if args.screen_config else None
+    calendar = CalendarSync(screen_config.parent if screen_config else None)
+    last_calendar_sync = 0.0
 
     while stop_event is None or not stop_event.is_set():
         if args.duration and time.monotonic() - started >= args.duration:
@@ -427,6 +430,13 @@ def main(argv=None, stop_event=None):
             boot = first or now - last_time_sync >= 15.0
 
             lines = []
+            if first or now - last_calendar_sync >= 60:
+                try:
+                    packets = calendar.packets(datetime.datetime.now().year)
+                    lines.extend(packets)
+                except (OSError, ValueError, KeyError, TypeError) as error:
+                    print('SALARY| Invalid work calendar: ' + str(error), flush=True)
+                last_calendar_sync = now
             if select_source and not args.no_codex:
                 lines.append('PC:AI|' + SOURCES[select_source])
             if first:

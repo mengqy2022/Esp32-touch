@@ -2,7 +2,7 @@
 import queue
 import threading
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from pathlib import Path
 import json
 import os
@@ -155,6 +155,7 @@ class DashboardGUI:
             row = self.row()
             self.button(row, '开启登录自启', lambda: self.api.autostart(True)).pack(side='left', padx=(0, 10))
             self.button(row, '关闭登录自启', lambda: self.api.autostart(False)).pack(side='left')
+            self.button(self.content, '导入月薪猫工作日日历', self.import_calendar).pack(anchor='w', pady=8)
             self.label(self.content, '配置与日志：' + str(self.root), color=self.DIM, wraplength=650).pack(anchor='w', pady=12)
             self.button(self.content, '打开运行目录', lambda: os.startfile(self.root)).pack(anchor='w', pady=8)
             log = tk.Text(self.content, bg=self.PANEL, fg=self.TEXT, relief='flat', wrap='word', height=16)
@@ -233,6 +234,20 @@ class DashboardGUI:
         self.api.set_device_source(self.root, port, source)
         config['ai_source'] = source
         self.save(config)
+
+    def import_calendar(self):
+        path = filedialog.askopenfilename(parent=self.window, title='导入工作日日历', filetypes=[('JSON 日历', '*.json')])
+        if not path:
+            return
+        def save():
+            from work_calendar import load_calendar
+            data = load_calendar(path)
+            target = self.root / 'work_calendar.json'
+            temporary = target.with_suffix('.tmp')
+            temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+            temporary.replace(target)
+            return data['year']
+        self.work(save, lambda year: self.status.set(f'已导入 {year} 年工作日日历；当前年份匹配时约60秒内同步，工资和班次请在设备设置'))
 
     def run(self):
         self.window.mainloop()

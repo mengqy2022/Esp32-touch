@@ -85,6 +85,26 @@ Telemetry shares this UART and can be delayed by frames. Flat application UI
 compresses better. This is a low-rate remote control view.
 WM_PRINT support, background input and minimized rendering depend on the app.
 
+## Salary Cat calendar (SALARY)
+
+`SALARY:CAL|year|month|work_hex|rest_hex` supplies date exceptions for one month.
+Bits 0–30 correspond to days 1–31. Unset days follow the device's weekly schedule;
+manual on-device date overrides take priority. Hex masks must not overlap or
+refer to nonexistent dates. Year must be 2000–2099; month 1–12.
+The device replies `SALARY:OK` or `SALARY:ERR|calendar`.
+
+The paired host sends all 12 months at connection and approximately every 60 seconds,
+only for its current local year. Firmware accumulates a full year before replacing
+the persisted calendar, skips unchanged NVS writes and does not change salary,
+shifts, boot-page preference or manual overrides. There is no authenticated calendar
+source or atomic transfer ID in this local single-host protocol; do not interleave
+two annual uploads. The protocol only synchronizes a supplied table, not Windows calendar events.
+
+For manual lifecycle checks, `SALARY:OPEN` / `SALARY:CLOSE` queue navigation to
+Salary Cat / OTHER. `SALARY:?` returns `SALARY:STATE|active|clock_synced|free_heap_bytes|rendered_frames`.
+It does not export salary or date overrides. These diagnostic commands and calendar
+sync use the existing UART reader and do not require a second serial owner.
+
 ## Existing FILE commands
 
 File names refer to the device filesystem (normally `/sdcard/...`). Responses

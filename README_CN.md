@@ -23,7 +23,7 @@ GAME、SYSTEM、OTHER 三个分类进入。Windows 配套 EXE 负责采集与发
 | AI 用量卡片 | 在设备主页点选 CODEX／CLAUDE，独立查看今日用量并记住选择；左侧 Token、右侧 `~¥` 人民币估算金额，约每 5 秒更新，无每日限额。 |
 | GAME | SUDOKU 数独、2048、FLAPPY、SNAKE 贪吃蛇、BREAKOUT 打砖块；统一暂停／继续和重新开始。 |
 | SYSTEM | PC SCREEN、SD CHECK、SYSTEM INFO、WIFI、CALIBRATE、PC DETAILS。 |
-| OTHER | INVENTORY 库存／BOM、VOCAB LAB 本地词书与学习计划、间隔复习、触屏默写。 |
+| OTHER | SALARY CAT 月薪猫、INVENTORY 库存／BOM、VOCAB LAB 本地词书与学习计划、间隔复习、触屏默写。 |
 | Windows EXE | 深色桌面 GUI：设备连接、PC SCREEN、AI 用量、设置与日志；支持窗口搜索与切换、COM 检查、CH340 驱动检查／安装入口和登录自启。 |
 
 工具的 BACK 返回对应分类，分类的 BACK 返回主页，PC DETAILS 点击返回主页。
@@ -67,6 +67,19 @@ GAME、SYSTEM、OTHER 三个分类进入。Windows 配套 EXE 负责采集与发
 GAME 新增贪吃蛇与打砖块；2048 支持滑动／方向键，数独改为大数字键盘并增加行列／宫格高亮，
 Flappy 更新背景和状态显示。各游戏顶部 **II** 暂停、**GO** 继续、**NEW** 重开；数独 NEW 换题。
 具体操作见 [系统功能](docs/HOME_DASHBOARD_CN.md)，实测范围见 [验证记录](docs/VALIDATION.md)。
+
+## 月薪猫
+
+2026-10-20 源码新增 [月薪猫](docs/SALARY_CAT_CN.md)：在 **OTHER → SALARY CAT** 打开黑白科技界面，
+查看透明灰阶动态猫咪、工资进度和上下班倒计时。**轻触金额切换今日／本月／年薪**；
+设备端可设月薪、两段班次、每周工作日、日期例外和开机页，支持 2026 中国调休。
+默认月薪 6,000 元，09:00–12:00、14:00–17:00；10 月 1—7 日放假，**10 日补班，全月 18 个工作日**。
+薪资按排班估算，未校时不计算；当前下载包的版本与实测范围见下载说明和验证记录。
+
+![月薪猫黑白动态仪表盘](docs/images/salary-cat/animated-dashboard.gif)
+
+上图为当前固件 LVGL 页面在电脑离屏渲染的 320×240 动态截图，采用固定示例数据，非实物照片。
+[关键界面截图及操作说明](docs/SALARY_CAT_CN.md#关键界面截图)包含金额切换、薪资输入、每周排班、指定日期和补班显示。
 
 ## Token 与人民币金额
 

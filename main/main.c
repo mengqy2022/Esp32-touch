@@ -21,6 +21,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
+#include "salary_store.h"
 
 static const char *TAG = "app";
 
@@ -164,6 +165,7 @@ void app_main(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+    salary_store_init();
 
     rgb_init();
     rgb_set(false, false, true);
