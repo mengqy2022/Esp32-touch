@@ -6,6 +6,8 @@
 
 [中文说明](README_CN.md) · [Documentation](docs/README.md) · [Changelog](CHANGELOG.md)
 
+📖 **Author's blog: [ESP32 Touch Monitor: PC Telemetry, Window Streaming, and Local Tools](https://www.mqymmb.com/posts/esp32-touch-dashboard/)**
+
 A 320×240 touchscreen dashboard with live PC monitoring, local Codex / Claude Code token
 statistics and estimated CNY costs, selected PC window sharing with touch control,
 plus games, system utilities, inventory
@@ -64,6 +66,9 @@ work-time/countdown, on-device salary/shift/workday settings, manual date overri
 a 2026 China holiday calendar and optional boot page. Tap the amount to cycle daily,
 monthly and annual estimates. October 2026 has **18 workdays**, including the Saturday
 makeup workday on October 10; October 1–7 are holidays.
+The 2026-10-21 update adds separate Saturday and Sunday animations and a special
+cat for nationally designated weekend makeup workdays. Personal rest overrides
+the calendar; the device owner confirmed normal display and continuous animation.
 It estimates scheduled time, requires a valid clock and does not record attendance.
 See the download/validation documents for published binary versions and tested scope.
 

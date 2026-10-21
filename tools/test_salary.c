@@ -24,6 +24,22 @@ int main(void)
     assert(!salary_workday(&data, 2026, 10, 1));
     assert(salary_workday(&data, 2026, 10, 10)); // Saturday makeup day.
     assert(!salary_workday(&data, 2026, 10, 11));
+    assert(salary_cat_index(&data, 2026, 10, 20) == 1);
+    assert(salary_cat_index(&data, 2026, 10, 10) == 7); // Official Saturday makeup.
+    assert(salary_cat_index(&data, 2026, 10, 17) == 5);
+    assert(salary_cat_index(&data, 2026, 10, 18) == 6);
+    assert(salary_cat_index(&data, 2026, 1, 4) == 7); // Official Sunday makeup.
+    assert(salary_cat_index(&data, 2027, 1, 2) == 5); // Uncovered calendar.
+    assert(salary_cat_index(&data, 2026, 2, 30) == 0);
+    assert(salary_set_override(&data, 20261010, 0));
+    assert(salary_cat_index(&data, 2026, 10, 10) == 5); // Personal rest overrides makeup.
+    assert(salary_set_override(&data, 20261010, -1));
+    assert(salary_set_override(&data, 20261017, 1));
+    assert(salary_cat_index(&data, 2026, 10, 17) == 5); // Personal work is not a national makeup day.
+    assert(salary_set_override(&data, 20261017, -1));
+    data.config.use_calendar = 0;
+    assert(salary_cat_index(&data, 2026, 10, 10) == 5);
+    data.config.use_calendar = 1;
     salary_result_t result = calculate(&data, 2026, 10, 20, 8, 0, 0);
     assert(result.phase == SALARY_BEFORE && result.countdown == 3600 && !result.today_fen);
     assert(result.workdays == 18 && result.daily_seconds == 21600 && result.annual_fen == 7200000);

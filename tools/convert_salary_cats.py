@@ -1,4 +1,4 @@
-"""Convert the five reference GIFs to RGB332 RLE frames (requires Pillow)."""
+"""Convert weekday, weekend and makeup-workday GIFs to RGB332 RLE (requires Pillow)."""
 import argparse
 from pathlib import Path
 import shutil
@@ -6,11 +6,20 @@ from collections import deque
 from PIL import Image
 
 
-def cutout(image):
+def cutout(image, remove_top_caption=False):
     """Remove edge-connected paper; keep the cat's enclosed white belly."""
     image = image.convert('RGBA')
     width, height = image.size
     pixels = list(image.getdata())
+    if remove_top_caption:
+        # This GIF's neutral captions move around outside the colored subject.
+        for y in range(height):
+            row = pixels[y * width:(y + 1) * width]
+            subject = [x for x, (r, g, b, a) in enumerate(row) if a >= 128 and max(r, g, b) - min(r, g, b) > 35]
+            left, right = (min(subject), max(subject)) if subject else (width, -1)
+            for x in range(width):
+                if x < left or x > right:
+                    pixels[y * width + x] = (0, 0, 0, 0)
     outside = bytearray(width * height)
     queue = deque()
     def background(index):
@@ -81,8 +90,9 @@ def main():
     assets = root / 'assets/salary_cat'
     assets.mkdir(parents=True, exist_ok=True)
     data, frames, ranges = bytearray(), [], []
-    for day in '一二三四五':
-        source = args.source / f'周{day}.gif'
+    names = [f'周{day}.gif' for day in '一二三四五六日'] + ['非周内.gif']
+    for name in names:
+        source = args.source / name
         if source.resolve() != (assets / source.name).resolve():
             shutil.copyfile(source, assets / source.name)
         start, elapsed = len(frames), 0
@@ -95,7 +105,7 @@ def main():
                     continue
                 if len(frames) > start:
                     frames[-1][2] = max(70, elapsed)
-                rgba = cutout(image).resize((112, 112), Image.Resampling.LANCZOS)
+                rgba = cutout(image, remove_top_caption=name == '非周内.gif').resize((112, 112), Image.Resampling.LANCZOS)
                 packed = encode(rgba.getdata())
                 frames.append([len(data), len(packed), 100])
                 data.extend(packed)
@@ -108,7 +118,7 @@ def main():
               'typedef struct { uint32_t offset; uint16_t length, duration; } salary_cat_frame_t;',
               'static const salary_cat_frame_t salary_cat_frames[] = {']
     header += [f'    {{{offset}, {length}, {duration}}},' for offset, length, duration in frames]
-    header += ['};', 'static const uint16_t salary_cat_ranges[5][2] = {']
+    header += ['};', 'static const uint16_t salary_cat_ranges[8][2] = {']
     header += [f'    {{{start}, {count}}},' for start, count in ranges]
     header += ['};', '']
     (root / 'main/salary_cat_frames.h').write_text('\n'.join(header), encoding='utf-8')

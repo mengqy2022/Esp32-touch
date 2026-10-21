@@ -53,6 +53,17 @@ bool salary_workday(const salary_data_t *d, int year, int month, int day)
     return (d->config.weekdays & (1u << weekday(year, month, day))) != 0;
 }
 
+int salary_cat_index(const salary_data_t *d, int year, int month, int day)
+{
+    if (!salary_date_valid(year * 10000 + month * 100 + day)) return 0;
+    int index = weekday(year, month, day);
+    if (index >= 5 && d->config.use_calendar && d->calendar.year == year &&
+        (d->calendar.known_months & (1u << (month - 1))) &&
+        (d->calendar.work[month - 1] & (1u << (day - 1))) &&
+        salary_workday(d, year, month, day)) return 7;
+    return index;
+}
+
 bool salary_set_override(salary_data_t *d, uint32_t date, int mode)
 {
     if (!salary_date_valid(date) || mode < -1 || mode > 1) return false;

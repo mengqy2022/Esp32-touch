@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-10-21 weekend Salary Cat animations
+
+- Add the supplied Saturday, Sunday and national weekend makeup-workday GIFs. Select the special makeup animation only for a covered, enabled calendar's explicit weekend work date; personal rest overrides it. Keep ordinary weekend or personal extra-work days on their weekday cat.
+- Retain monochrome transparent animation, the existing playback buffer and salary calculation rules; add Saturday/Sunday, disabled-calendar and personal-override selection checks.
+- Record the device owner's confirmation of normal screen display and continuous cat playback. Refresh the makeup screenshot and add Saturday/Sunday/makeup LVGL animation previews with capture provenance.
+- Link the author's ESP32 Touch Monitor blog article from both project READMEs and the documentation index.
+
 ### 2026-10-20 illustrated device guide
 
 - Add five 320×240 screenshots rendered from current LVGL UI code: Home, GAME, SYSTEM, OTHER and the on-device Claude selection. Use synthetic telemetry and usage; document capture provenance and limits.

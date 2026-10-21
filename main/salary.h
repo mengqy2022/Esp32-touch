@@ -52,6 +52,7 @@ bool salary_config_valid(const salary_config_t *config);
 int salary_month_days(int year, int month);
 bool salary_date_valid(uint32_t date);
 bool salary_workday(const salary_data_t *data, int year, int month, int day);
+int salary_cat_index(const salary_data_t *data, int year, int month, int day); // Mon..Sun = 0..6; official weekend makeup = 7.
 bool salary_set_override(salary_data_t *data, uint32_t date, int mode); // -1 automatic, 0 rest, 1 work
 bool salary_calculate(const salary_data_t *data, const struct tm *local, salary_result_t *out);
 bool salary_calendar_packet(salary_calendar_t *calendar, const char *line);

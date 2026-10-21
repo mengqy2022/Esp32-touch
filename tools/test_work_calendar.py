@@ -67,7 +67,7 @@ class CalendarTests(unittest.TestCase):
             offset += length
         self.assertEqual(offset, len(data))
         ranges = re.findall(r'\{(\d+), (\d+)\}', header)
-        self.assertEqual(len(ranges), 5)
+        self.assertEqual(len(ranges), 8)
         start = 0
         for first, count in ranges:
             self.assertEqual(int(first), start)

@@ -272,7 +272,7 @@ static void timer(lv_timer_t *unused)
     salary_result_t result;
     bool valid = synced && salary_calculate(&data, &local, &result);
     int day = valid ? (local.tm_wday + 6) % 7 : 0;
-    int animation = day < 5 ? day : 4;
+    int animation = valid ? salary_cat_index(&data, local.tm_year + 1900, local.tm_mon + 1, local.tm_mday) : 0;
     if (s_pixels && (s_day != animation || tick - s_frame_tick >= salary_cat_frames[s_frame].duration)) {
         if (s_day != animation) { s_day = animation; s_frame = salary_cat_ranges[animation][0]; }
         else {
