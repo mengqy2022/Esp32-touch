@@ -77,6 +77,26 @@ class CalendarTests(unittest.TestCase):
             start += int(count)
         self.assertEqual(start, len(frames))
 
+    def test_friday_white_body_survives_entering_and_leaving(self):
+        header = (ROOT / 'main/salary_cat_frames.h').read_text()
+        frames = [tuple(map(int, item)) for item in re.findall(r'\{(\d+), (\d+), (\d+)\}', header)]
+        first, count = map(int, re.findall(r'\{(\d+), (\d+)\}', header)[4])
+        data = (ROOT / 'main/salary_cat.rle').read_bytes()
+        self.assertEqual(count, 33)
+        self.assertEqual(sum(frame[2] for frame in frames[first:first + count]), 4300)
+        # These frames show the white body entering, fully visible, then leaving.
+        for frame in (6, 10, 14, 20, 25):
+            offset, length, _ = frames[first + frame]
+            payload = data[offset:offset + length]
+            white = 0
+            for run, value in zip(payload[::2], payload[1::2]):
+                red, green, blue = (value >> 5) * 255 // 7, (value >> 2 & 7) * 255 // 7, (value & 3) * 255 // 3
+                gray = (red * 77 + green * 150 + blue * 29 + 128) >> 8
+                if value and gray >= 230:
+                    white += run
+            with self.subTest(frame=frame):
+                self.assertGreater(white, 100, 'The white body must not become a transparent hole')
+
     def test_salary_font_covers_all_page_text(self):
         text = (ROOT / 'main/salary_ui.c').read_text(encoding='utf-8')
         font = (ROOT / 'main/font_salary16.c').read_text(encoding='utf-8')

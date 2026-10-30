@@ -6,7 +6,7 @@ from collections import deque
 from PIL import Image
 
 
-def cutout(image, remove_top_caption=False):
+def cutout(image, remove_top_caption=False, preserve_clipped_body=False):
     """Remove edge-connected paper; keep the cat's enclosed white belly."""
     image = image.convert('RGBA')
     width, height = image.size
@@ -20,11 +20,21 @@ def cutout(image, remove_top_caption=False):
             for x in range(width):
                 if x < left or x > right:
                     pixels[y * width + x] = (0, 0, 0, 0)
+    sealed = bytearray(width * height)
+    if preserve_clipped_body:
+        # Close the offscreen outline so the white body cannot flood into paper.
+        edges = [list(range(width)), list(range((height - 1) * width, height * width)),
+                 list(range(0, width * height, width)), list(range(width - 1, width * height, width))]
+        for edge in edges:
+            ink = [i for i, index in enumerate(edge) if pixels[index][3] >= 128 and
+                   (min(pixels[index][:3]) < 140 or max(pixels[index][:3]) - min(pixels[index][:3]) > 35)]
+            if ink:
+                for index in edge[ink[0]:ink[-1] + 1]: sealed[index] = 1
     outside = bytearray(width * height)
     queue = deque()
     def background(index):
         r, g, b, a = pixels[index]
-        return a < 128 or min(r, g, b) >= 230
+        return not sealed[index] and (a < 128 or min(r, g, b) >= 230)
     def visit(index):
         if not outside[index] and background(index):
             outside[index] = 1
@@ -105,7 +115,8 @@ def main():
                     continue
                 if len(frames) > start:
                     frames[-1][2] = max(70, elapsed)
-                rgba = cutout(image, remove_top_caption=name == '非周内.gif').resize((112, 112), Image.Resampling.LANCZOS)
+                rgba = cutout(image, remove_top_caption=name == '非周内.gif',
+                              preserve_clipped_body=name == '周五.gif').resize((112, 112), Image.Resampling.LANCZOS)
                 packed = encode(rgba.getdata())
                 frames.append([len(data), len(packed), 100])
                 data.extend(packed)

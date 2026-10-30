@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-10-30 Friday Salary Cat color fix
+
+- Fix Friday's white body becoming transparent while crossing the image edges: the background flood fill could enter the offscreen, open outline. Close that boundary only when converting the Friday GIF, preserving the original body colors without changing the runtime palette or video frame.
+- Regenerate animation data; retain every frame duration, motion bounds and loop boundary, with identical encoded payloads for the seven other cats. Add a regression check for visible white body pixels during entry and exit, plus an actual LVGL full-cycle preview.
+
 ### 2026-10-21 weekend Salary Cat animations
 
 - Add the supplied Saturday, Sunday and national weekend makeup-workday GIFs. Select the special makeup animation only for a covered, enabled calendar's explicit weekend work date; personal rest overrides it. Keep ordinary weekend or personal extra-work days on their weekday cat.
