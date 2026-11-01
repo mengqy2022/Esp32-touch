@@ -2,9 +2,10 @@
 import datetime as dt
 import json
 import os
+import re
 from pathlib import Path
 
-from codex_usage import CodexUsage, estimate_cny_fen, codex_packet
+from codex_usage import CodexUsage, estimate_cny_costs, codex_packet
 
 SOURCES = {'codex': 'CODEX', 'claude': 'CLAUDE'}
 
@@ -100,12 +101,16 @@ class AIUsage:
         self.readers = {'codex': CodexUsage(codex_home), 'claude': ClaudeUsage(claude_home)}
 
     def sample(self, source, prices, now=None):
+        report = self.details(source, prices, now)
+        return report['tokens'], report['day'], report['cost_fen'], report['source']
+
+    def details(self, source, prices, now=None):
         if source not in SOURCES:
             raise ValueError('Unknown AI source')
         reader = self.readers[source]
         tokens, day = reader.read(now)
-        cost = estimate_cny_fen(reader.by_model, prices) if prices and tokens >= 0 else -1
-        return tokens, day, cost, SOURCES[source]
+        cost, models = estimate_cny_costs(reader.by_model, prices) if tokens >= 0 else (-1, [])
+        return dict(source=SOURCES[source], day=day, tokens=tokens, cost_fen=cost, models=models)
 
 
 def ai_packet(tokens, day, cost, label):
@@ -115,3 +120,19 @@ def ai_packet(tokens, day, cost, label):
     # Reuse the integer validation and reserved zero slot of the legacy encoder.
     fields = codex_packet(tokens, 0, day, cost).split('|', 1)[1]
     return 'PC:USAGE|' + label + '|' + fields
+
+
+def ai_models_packet(models, day, label):
+    """Bound model metadata independently so older firmware still receives usage."""
+    if label not in SOURCES.values() or type(day) is not int or not 20200101 <= day <= 20991231:
+        raise ValueError('Invalid model metadata source or date')
+    names = sorted({re.sub(r'[^A-Za-z0-9._/-]', '?', model)[:48] for model in models if model})
+    selected = []
+    for name in names:
+        if len(', '.join(selected + [name])) > 175:
+            break
+        selected.append(name)
+    text = ', '.join(selected)
+    if len(selected) < len(names):
+        text += f' +{len(names) - len(selected)} more'
+    return f'PC:MODELS|{label}|{day}|{text}'

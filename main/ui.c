@@ -89,6 +89,7 @@ static lv_obj_t *s_home_detail[3];
 static lv_obj_t *s_codex_value;
 static lv_obj_t *s_ai_tabs[2];
 static lv_obj_t *s_codex_state;
+static lv_obj_t *s_ai_models;
 static ui_screen_t s_menu_parent = SCREEN_MENU;
 
 // Touch-calibration confirmation overlay (LVGL top layer)
@@ -695,8 +696,9 @@ static void build_menu_screen(void)
         lv_obj_set_style_pad_all(s_ai_tabs[i], 0, 0);
         lv_obj_set_style_radius(s_ai_tabs[i], 5, 0);
     }
-    lv_obj_t *cost_title = home_label(codex, "TODAY CNY", 186, 5, 108, CLR_TEXT_DIM);
-    lv_obj_set_style_text_align(cost_title, LV_TEXT_ALIGN_RIGHT, 0);
+    s_ai_models = home_label(codex, "MODELS --", 174, 5, 120, CLR_TEXT_DIM);
+    lv_label_set_long_mode(s_ai_models, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_obj_set_style_anim_speed(s_ai_models, 22, 0);
     s_codex_state = home_label(codex, "~\xC2\xA5--", 186, 28, 108, CLR_OK);
     lv_obj_set_style_text_font(s_codex_state, &s_money_font, 0);
     lv_obj_set_style_text_align(s_codex_state, LV_TEXT_ALIGN_RIGHT, 0);
@@ -932,6 +934,7 @@ static void refresh_menu_bottom(void)
         snprintf(buf, sizeof(buf), "%.1fk tokens", st.codex_tokens / 1000.0);
     } else snprintf(buf, sizeof(buf), "-- tokens");
     label_set_text_if_changed(s_codex_value, buf);
+    label_set_text_if_changed(s_ai_models, valid && st.ai_models[0] ? st.ai_models : "MODELS --");
     if (valid && st.codex_cost_fen >= 0)
         snprintf(buf, sizeof(buf), "~\xC2\xA5%.2f", st.codex_cost_fen / 100.0);
     else snprintf(buf, sizeof(buf), "~\xC2\xA5--");
@@ -4132,6 +4135,7 @@ static void do_set_screen(ui_screen_t scr)
     s_menu_loc = NULL;
     s_codex_value = NULL;
     s_codex_state = NULL;
+    s_ai_models = NULL;
     s_ai_tabs[0] = s_ai_tabs[1] = NULL;
     for (int i = 0; i < 3; ++i) {
         s_home_arc[i] = NULL;

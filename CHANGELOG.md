@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-11-01 model usage and cost details
+
+- Add per-source daily model/tier details to the desktop AI Usage page, with input/cache/output tokens, individual CNY estimates and the combined cost. Query views remain separate from the device's provider selection and work without a serial connection.
+- Share the same price calculation for detail rows and device totals, summing exact Decimal amounts before rounding the total once. Keep unknown models visible and mark incomplete totals unavailable.
+- Add the six missing GPT models from the user's screenshot at the explicitly confirmed 20% of standard prices; retain existing GPT/Claude rates and custom prices/FX, with a dated migration backup. Missing cache-write rates remain unavailable.
+- Build desktop version 2026.11.01.1; no firmware or UART protocol change is needed.
+- Follow-up desktop 2026.11.01.2 and firmware add independent, bounded `PC:MODELS` metadata. The home card scrolls the selected provider's daily model names above its total cost, hiding stale or mismatched-date names; unchanged usage packets preserve compatibility with older firmware.
+- Publish the portable 2026.11.01.2 EXE, matching full firmware ZIP and SHA-256 files, including Salary Cat and the Friday fix. Update both READMEs, download guides and synthetic model/cost previews; verify packaged window capture/input and firmware contents.
+
 ### 2026-10-30 Friday Salary Cat color fix
 
 - Fix Friday's white body becoming transparent while crossing the image edges: the background flood fill could enter the offscreen, open outline. Close that boundary only when converting the Friday GIF, preserving the original body colors without changing the runtime palette or video frame.

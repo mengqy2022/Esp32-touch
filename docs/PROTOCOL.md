@@ -11,6 +11,8 @@ One ASCII line per command, terminated by `\n`, at 115200 baud. The existing
 | `PC:TIME\|unix_seconds` | Synchronize wall clock from USB. |
 | `PC:STAT\|cpu\|gpu\|cpu_C\|gpu_C\|mem\|used_MB\|total_MB` | Percent loads, temperatures, physical RAM. `-1` means unavailable; memory fields are optional for older senders. |
 | `PC:USAGE\|source\|today_tokens\|0\|YYYYMMDD\|estimated_CNY_fen` | Update the independent `CODEX` or `CLAUDE` cache without changing the device selection. Counts/cost use signed 64-bit integers; `-1` means unavailable. The reserved slot is zero. |
+| `PC:MODELS\|source\|YYYYMMDD\|model names` | Optional independent `CODEX` / `CLAUDE` model metadata; up to 191 printable ASCII bytes, excluding `\|`. Empty text clears the list. The host deduplicates model/tier rows and bounds the list, showing a remaining count if necessary. |
+| `PC:MODELS?` | Query selected source's model metadata: `PC:MODELS_STATE\|source\|usage_day\|model names`. Names are empty when absent, expired, or dated differently from the usage cache. |
 | `PC:AI\|source` | Select `CODEX` or `CLAUDE` once and persist the preference on the device. Calls the same function as the touch buttons. Normal telemetry does not send this command. |
 | `PC:AI?` | Query selected source. Response: `PC:AI_STATE\|source\|tokens\|YYYYMMDD\|cost_fen\|fresh`. The last flag reports a packet received within 90 seconds; UI also checks tokens and local date. |
 | `PC:CODEX\|today_tokens\|0\|YYYYMMDD\|estimated_CNY_fen` | Legacy packet updating the currently selected source. Older packets without cost remain supported; former daily-goal fields are parsed and ignored. |
@@ -27,7 +29,12 @@ The paired host and firmware must both support `PC:USAGE` for touch selection.
 Older hosts may still overwrite selection with their `PC:AI` commands; update the
 companion together with the firmware.
 
-AI usage packets transfer only aggregate token counts. No prompts, credentials or
+Model metadata expires independently after 90 seconds and never refreshes PC or usage
+freshness. The home screen scrolls the selected source's names above its combined CNY
+amount; stale or non-today usage hides the names. Older firmware ignores `MODELS`
+while continuing to accept unchanged `USAGE` packets. Older hosts leave names unavailable.
+
+AI usage packets transfer only aggregate token counts and model identifiers. No prompts, credentials or
 account identifiers are included. The former daily-goal slot is always zero.
 The cost uses locally configured rates and exchange rate, not billed charges.
 

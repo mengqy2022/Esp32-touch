@@ -19,12 +19,15 @@ extern "C" {
 //             (-1 tokens/cost = unavailable; cost field optional)
 //   PC:AI|CODEX/CLAUDE                    -> selected independent usage source
 //   PC:USAGE|CODEX/CLAUDE|<tokens>|0|<YYYYMMDD>|<CNY_fen> -> update one cache without selecting it
+//   PC:MODELS|CODEX/CLAUDE|<YYYYMMDD>|<model names> -> independent, optional model metadata
+//   PC:MODELS?                           -> PC:MODELS_STATE|<source>|<day>|<model names>
 //   PC:AI?                               -> PC:AI_STATE|<source>|<tokens>|<day>|<cost>|<fresh>
 //
 // Lines are dispatched from file_xfer.c (the single owner of the UART) by
 // calling pc_monitor_handle_line().
 
 #define PCMON_HOST_MAX  24
+#define PCMON_MODELS_MAX 192
 
 typedef struct {
     bool link;               // a PC packet was received within the last 5 s
@@ -40,6 +43,7 @@ typedef struct {
     char host[PCMON_HOST_MAX]; // hostname / PC name, "" if unknown
     int64_t codex_tokens;
     char ai_source[16];      // selected local usage source
+    char ai_models[PCMON_MODELS_MAX]; // today's model names; empty if missing/stale
     int64_t codex_cost_fen;   // estimated CNY cents, -1 = unavailable
     int codex_day;
     bool codex_link;          // valid Codex packet received within 90 s

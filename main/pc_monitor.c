@@ -28,6 +28,9 @@ typedef struct {
     int day;
     int64_t received_us;
     bool received;
+    char models[PCMON_MODELS_MAX];
+    int models_day;
+    int64_t models_received_us;
 } ai_usage_t;
 static ai_usage_t s_usage[2]; // Codex and Claude are cached independently.
 static int s_ai_selected;
@@ -228,6 +231,26 @@ static void handle_usage(const char *p, int index)
                         index == 1 ? "Claude" : "Codex", used, day, cost);
 }
 
+static void handle_models(const char *p, int index)
+{
+    errno = 0;
+    char *end;
+    long day = strtol(p, &end, 10);
+    if (end == p || *end != '|' || errno || day < 20200101 || day > 20991231) return;
+    const char *models = end + 1;
+    size_t length = strlen(models);
+    if (length >= PCMON_MODELS_MAX) return;
+    for (const char *c = models; *c; ++c) {
+        if ((unsigned char)*c < 32 || (unsigned char)*c > 126 || *c == '|') return;
+    }
+    portENTER_CRITICAL(&s_lock);
+    ai_usage_t *usage = &s_usage[index];
+    memcpy(usage->models, models, length + 1);
+    usage->models_day = (int)day;
+    usage->models_received_us = esp_timer_get_time();
+    portEXIT_CRITICAL(&s_lock);
+}
+
 void pc_monitor_handle_line(const char *line)
 {
     if (!line) return;
@@ -251,6 +274,13 @@ void pc_monitor_handle_line(const char *line)
     } else if (strncmp(line, "USAGE|", 6) == 0) {
         if (strncmp(line + 6, "CODEX|", 6) == 0) handle_usage(line + 12, 0);
         else if (strncmp(line + 6, "CLAUDE|", 7) == 0) handle_usage(line + 13, 1);
+    } else if (strncmp(line, "MODELS|", 7) == 0) {
+        if (strncmp(line + 7, "CODEX|", 6) == 0) handle_models(line + 13, 0);
+        else if (strncmp(line + 7, "CLAUDE|", 7) == 0) handle_models(line + 14, 1);
+    } else if (strcmp(line, "MODELS?") == 0) {
+        pc_monitor_status_t state;
+        pc_monitor_get(&state);
+        printf("PC:MODELS_STATE|%s|%d|%s\n", state.ai_source, state.codex_day, state.ai_models);
     } else if (strncmp(line, "CODEX|", 6) == 0) {
         portENTER_CRITICAL(&s_lock);
         int selected = s_ai_selected;
@@ -276,6 +306,8 @@ void pc_monitor_get(pc_monitor_status_t *out)
     bool received = s_rx_since_boot;
     int64_t last_pkt_us = s_last_pkt_us;
     out->codex_link = usage->received && now_us - usage->received_us < 90000000LL;
+    if (usage->models_day == usage->day && now_us - usage->models_received_us < 90000000LL)
+        memcpy(out->ai_models, usage->models, sizeof(out->ai_models));
     portEXIT_CRITICAL(&s_lock);
 
     if (!received) {

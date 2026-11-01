@@ -23,7 +23,7 @@ target, pin map and display orientation for this board. Other boards need portin
 | Area | Current behavior |
 | --- | --- |
 | Home | Date, weekday, Wi-Fi status, clock; CPU/GPU/RAM rings, temperatures and RAM usage. Home stays visible when idle. |
-| AI usage | Tap CODEX / CLAUDE on the device to switch independent daily usage; selection survives reboot. Daily tokens on the left, estimated CNY cost on the right. EXE selection remains a fallback. No daily goal. Refreshes about every 5 seconds. |
+| AI usage | Tap CODEX / CLAUDE on the device to switch independent daily usage; selection survives reboot. Model names scroll above the combined CNY cost; tokens and cost sum all models of that provider. EXE selection remains a fallback. No daily goal. Refreshes about every 5 seconds. |
 | GAME | Sudoku, 2048, Flappy, Snake and Breakout; pause/resume and restart controls. |
 | SYSTEM | PC SCREEN, SD check, system info, Wi-Fi, confirmed touch calibration and PC details. |
 | OTHER | Salary Cat, SD-backed inventory/BOM and Vocab Lab with local wordbooks, study plans, spaced review and touchscreen dictation. |
@@ -37,8 +37,25 @@ after 5 seconds, Codex data after 90 seconds.
 Codex usage comes from locally retained session logs. It is not a server billing
 or subscription quota API. Prices are user-supplied configuration, with an
 editable default USD/CNY rate of 7.20. AI usage packets contain only aggregate
-counts and cost, without prompts or credentials. Enabling PC SCREEN also transmits
+counts, cost and model identifiers, without prompts or credentials. Enabling PC SCREEN also transmits
 pixels from the selected window, which may contain private information.
+
+## 2026-11-01: model costs and device sync
+
+Companion **2026.11.01.2** and matching full firmware are available in the [download directory](dist/README.md).
+The AI Usage page lists today's models, input/cache/output tokens, context tiers,
+individual estimates and a combined total. Eight GPT models use the user's confirmed
+20% of screenshot standard rates; custom rates and FX are preserved, and Claude stays separate.
+The device scrolls daily model names above the selected provider's total. Update both
+the companion and firmware. These are local usage estimates, not active-session lists or official bills.
+
+| Device: model names and total | Desktop: per-model usage and costs |
+| --- | --- |
+| ![Device model names](docs/images/device/home-models.png) | ![Desktop model usage](docs/images/device/ai-usage.png) |
+
+Both previews use synthetic data: the device view is rendered from the actual LVGL page,
+and the desktop view is a real GUI test window. See [pricing](docs/CODEX_USAGE_CN.md)
+and [validation](docs/VALIDATION.md) for assumptions and tested scope.
 
 ## Device screens
 
@@ -103,7 +120,7 @@ provide the full system upgrade for the tested ESP32 board, including PC SCREEN 
 
 ## PC SCREEN and game upgrade — 2026-10-18
 
-Use companion **2026.10.18.4** with the updated firmware. In the GUI's **PC SCREEN**
+Use companion **2026.11.01.2** with the updated firmware. In the GUI's **PC SCREEN**
 page, search by window title/process and double-click a window or select share.
 On the device, open **SYSTEM → PC SCREEN**. Select another window in the GUI to
 switch without reopening the serial port; stop sharing clears the target.

@@ -26,7 +26,7 @@ from pc_screen import Window
 APP_NAME = 'ESP32TouchDashboard'
 RUN_KEY = r'Software\Microsoft\Windows\CurrentVersion\Run'
 APPROVED_KEY = r'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
-APP_VERSION = '2026.10.20.1'
+APP_VERSION = '2026.11.01.2'
 
 
 def choose_screen_window(root):
@@ -87,7 +87,7 @@ def update_prices(root):
             if current.get('currency') == 'USD':
                 models[model] = rates
     if current != updated:
-        backup = root / 'codex_prices.before-2026-10-17.json'
+        backup = root / ('codex_prices.before-' + template['version'] + '.json')
         if not backup.exists():
             shutil.copy2(path, backup)
         path.write_text(json.dumps(updated, ensure_ascii=False, indent=2), encoding='utf-8')

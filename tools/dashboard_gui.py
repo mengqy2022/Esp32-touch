@@ -6,6 +6,10 @@ from tkinter import ttk, messagebox, filedialog
 from pathlib import Path
 import json
 import os
+import time
+from decimal import Decimal
+
+from ai_usage import AIUsage
 
 
 class DashboardGUI:
@@ -22,6 +26,10 @@ class DashboardGUI:
         self.events = queue.Queue()
         self.targets = []
         self.page = None
+        self.usage = AIUsage()
+        self.usage_busy = False
+        self.usage_last_read = 0
+        self.usage_view = tk.StringVar(value='CODEX')
         style = ttk.Style(self.window)
         style.theme_use('clam')
         style.configure('Treeview', background=self.PANEL, fieldbackground=self.PANEL,
@@ -29,6 +37,8 @@ class DashboardGUI:
         style.configure('Treeview.Heading', background=self.SIDE, foreground=self.TEXT)
         style.map('Treeview', background=[('selected', '#36594d')])
         style.configure('TCombobox', fieldbackground=self.PANEL, background=self.PANEL, foreground=self.TEXT)
+        style.map('TCombobox', fieldbackground=[('readonly', self.PANEL)],
+                  foreground=[('readonly', self.TEXT)])
         sidebar = tk.Frame(self.window, bg=self.SIDE, width=200)
         sidebar.pack(side='left', fill='y')
         sidebar.pack_propagate(False)
@@ -78,6 +88,8 @@ class DashboardGUI:
             pass
         if self.page == '设备连接':
             self.refresh_status()
+        elif self.page == 'AI 用量':
+            self.refresh_usage()
         self.window.after(500, self.poll)
 
     def config(self):
@@ -146,11 +158,37 @@ class DashboardGUI:
             self.button(row, '停止共享', self.stop_window).pack(side='left')
             self.refresh_windows()
         elif page == 'AI 用量':
-            self.label(self.content, '在设备主页点选 CODEX / CLAUDE 即可切换。\n这里保留备用入口；两种来源分别统计，不合并。', 12).pack(anchor='w', pady=16)
+            self.label(self.content, '在设备主页点选 CODEX / CLAUDE 切换。下方查询各来源今日用过的模型和费用。', wraplength=680).pack(anchor='w', pady=12)
             row = self.row()
+            self.label(row, '查询来源：').pack(side='left')
+            view = ttk.Combobox(row, textvariable=self.usage_view, values=('CODEX', 'CLAUDE'), state='readonly', width=12)
+            view.pack(side='left', padx=(0, 12))
+            view.bind('<<ComboboxSelected>>', lambda _: self.refresh_usage(force=True))
+            self.button(row, '立即刷新', lambda: self.refresh_usage(force=True)).pack(side='left')
+            self.usage_summary = self.label(self.content, '正在读取本机日志…', 12, wraplength=700)
+            self.usage_summary.pack(anchor='w', pady=12)
+            table = tk.Frame(self.content, bg=self.BG)
+            table.pack(fill='both', expand=True, pady=8)
+            columns = [('model', '模型', 175), ('tier', '上下文', 70), ('input', '输入（含缓存）', 110),
+                       ('cached', '缓存读取', 90), ('cache_write', '缓存写入', 90), ('output', '输出', 80), ('cost', '估算人民币', 110)]
+            self.usage_tree = ttk.Treeview(table, columns=[c[0] for c in columns], show='headings', height=7)
+            for key, title, width in columns:
+                self.usage_tree.heading(key, text=title)
+                self.usage_tree.column(key, width=width, minwidth=60, anchor='w' if key == 'model' else 'e')
+            self.usage_tree.grid(row=0, column=0, sticky='nsew')
+            scroll = ttk.Scrollbar(table, orient='vertical', command=self.usage_tree.yview)
+            scroll.grid(row=0, column=1, sticky='ns')
+            horizontal = ttk.Scrollbar(table, orient='horizontal', command=self.usage_tree.xview)
+            horizontal.grid(row=1, column=0, sticky='ew')
+            self.usage_tree.configure(yscrollcommand=scroll.set, xscrollcommand=horizontal.set)
+            table.rowconfigure(0, weight=1)
+            table.columnconfigure(0, weight=1)
+            self.label(self.content, '约每 5 秒刷新。输入已包含缓存；总额按各模型、各档位累加后统一四舍五入。\n仅为本机今日记录，不代表当前并发会话或官方账单。', color=self.DIM, wraplength=700).pack(anchor='w', pady=8)
+            row = self.row()
+            self.button(row, '编辑价格和汇率', lambda: os.startfile(self.root / 'codex_prices.json')).pack(side='left', padx=(0, 12))
             for source, title in (('codex', 'Codex'), ('claude', 'Claude Code')):
-                self.button(row, title, lambda value=source: self.work(lambda: self.select_source(value))).pack(side='left', padx=(0, 12))
-            self.button(self.content, '编辑价格和汇率', lambda: os.startfile(self.root / 'codex_prices.json')).pack(anchor='w', pady=20)
+                self.button(row, '设备切换至 ' + title, lambda value=source: self.work(lambda: self.select_source(value))).pack(side='left', padx=(0, 12))
+            self.refresh_usage(force=True)
         else:
             row = self.row()
             self.button(row, '开启登录自启', lambda: self.api.autostart(True)).pack(side='left', padx=(0, 10))
@@ -166,6 +204,39 @@ class DashboardGUI:
                     stream.seek(max(0, path.stat().st_size - 12000))
                     log.insert('1.0', stream.read().decode('utf-8', 'replace'))
             log.configure(state='disabled')
+
+    def refresh_usage(self, force=False):
+        if self.usage_busy or (not force and time.monotonic() - self.usage_last_read < 5):
+            return
+        self.usage_busy = True
+        self.usage_last_read = time.monotonic()
+        source = self.usage_view.get().lower()
+        def read():
+            try:
+                return self.usage.details(source, self.root / 'codex_prices.json')
+            finally:
+                self.usage_busy = False
+        self.work(read, self.loaded_usage)
+
+    def loaded_usage(self, report):
+        if self.page != 'AI 用量' or self.usage_view.get() != report['source']:
+            self.usage_last_read = 0
+            return
+        tree = self.usage_tree
+        tree.delete(*tree.get_children())
+        for row in report['models']:
+            cost = '缺少单价／用量细分' if row['cost_cny'] is None else '~¥' + format(Decimal(row['cost_cny']), '.4f')
+            tree.insert('', 'end', values=(row['model'], '长' if row['tier'] == 'long' else '短',
+                        f"{row['input']:,}", f"{row['cached']:,}", f"{row['cache_write']:,}", f"{row['output']:,}", cost))
+        day = str(report['day'])
+        title = f"{report['source']} · {day[:4]}-{day[4:6]}-{day[6:]}"
+        if report['tokens'] < 0:
+            text = title + '：没有可用的本机用量记录'
+        else:
+            cost = '单价或用量细分不全，完整总额不可用' if report['cost_fen'] < 0 else f"总费用约 ¥{report['cost_fen'] / 100:.2f}"
+            models = len({r['model'] for r in report['models']})
+            text = f"{title} · {models} 个模型 · {report['tokens']:,} Token\n{cost}"
+        self.usage_summary.configure(text=text)
 
     def refresh_status(self):
         try:

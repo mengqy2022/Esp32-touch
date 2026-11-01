@@ -42,11 +42,36 @@ def main():
             raise RuntimeError('No AI state response from device')
 
         original = query()[0]
+        def models(commands=''):
+            connection.reset_input_buffer()
+            connection.write((commands + 'PC:MODELS?\n').encode('ascii'))
+            deadline = time.monotonic() + 3
+            while time.monotonic() < deadline:
+                line = connection.readline()
+                chunks.append(line)
+                if line.startswith(b'PC:MODELS_STATE|'):
+                    _, source, date, names = line.decode('ascii').strip().split('|', 3)
+                    return source, int(date), names
+            raise RuntimeError('No model metadata response from device')
+
         try:
             packets = (f'PC:USAGE|CODEX|12345|0|{day}|123\n'
                        f'PC:USAGE|CLAUDE|67890|0|{day}|456\n')
             checks['codex_cache'] = query(packets + 'PC:AI|CODEX\n') == ('CODEX', 12345, day, 123, 1)
             checks['claude_cache'] = query('PC:AI|CLAUDE\n') == ('CLAUDE', 67890, day, 456, 1)
+            metadata = (f'PC:MODELS|CODEX|{day}|gpt-6-astra, gpt-6.1-sol\n'
+                        f'PC:MODELS|CLAUDE|{day}|claude-fable-5-1\n')
+            checks['claude_models'] = models(metadata) == ('CLAUDE', day, 'claude-fable-5-1')
+            checks['codex_models'] = models('PC:AI|CODEX\n') == ('CODEX', day, 'gpt-6-astra, gpt-6.1-sol')
+            yesterday = int((dt.datetime.now() - dt.timedelta(days=1)).strftime('%Y%m%d'))
+            checks['wrong_day_models_hidden'] = models(f'PC:MODELS|CODEX|{yesterday}|old-model\n') == ('CODEX', day, '')
+            models(metadata)
+            invalid_models = (f'PC:MODELS|CODEX|{day}|' + 'x' * 192 + '\n' +
+                              f'PC:MODELS|CODEX|{day}|bad|field\n' +
+                              f'PC:MODELS|CODEX|{day}|bad\x01name\n')
+            checks['invalid_models_rejected'] = models(invalid_models) == ('CODEX', day, 'gpt-6-astra, gpt-6.1-sol')
+            checks['empty_models_clear_cache'] = models(f'PC:MODELS|CODEX|{day}|\n') == ('CODEX', day, '')
+            models(metadata + 'PC:AI|CLAUDE\n')
             checks['stream_does_not_override_selection'] = query(packets * 3) == ('CLAUDE', 67890, day, 456, 1)
             invalid = (f'PC:USAGE|CLAUDE|-2|0|{day}|999\n'
                        f'PC:USAGE|UNKNOWN|999|0|{day}|999\nPC:AI|UNKNOWN\n')
@@ -62,6 +87,7 @@ def main():
             state = query()
             checks['selection_survives_reset'] = state[0] == 'CLAUDE'
             checks['reboot_does_not_reuse_old_counts'] = state == ('CLAUDE', -1, 0, -1, 0)
+            checks['reboot_does_not_reuse_old_models'] = models() == ('CLAUDE', 0, '')
             checks['cache_updates_after_reset'] = query(packets) == ('CLAUDE', 67890, day, 456, 1)
         finally:
             query('PC:AI|' + original + '\n')

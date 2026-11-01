@@ -5,10 +5,24 @@ import unittest
 import os
 from pathlib import Path
 
-from ai_usage import ClaudeUsage, AIUsage, ai_packet
+from ai_usage import ClaudeUsage, AIUsage, ai_packet, ai_models_packet
 
 
 class ClaudeUsageTests(unittest.TestCase):
+    def test_model_metadata_is_bounded_deduplicated_and_separate(self):
+        self.assertEqual(ai_models_packet(['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-astra'], 20261101, 'CODEX'),
+                         'PC:MODELS|CODEX|20261101|gpt-6-astra, gpt-6.1-sol')
+        self.assertEqual(ai_models_packet([], 20261101, 'CLAUDE'), 'PC:MODELS|CLAUDE|20261101|')
+        packet = ai_models_packet(['bad|name\n\x1b猫'] + ['model-' + str(i) + 'x' * 100 for i in range(20)], 20261101, 'CODEX')
+        self.assertEqual(len(packet.split('|')), 4)
+        self.assertTrue(packet.isascii())
+        self.assertNotIn('\n', packet)
+        self.assertLess(len(packet.split('|')[-1]), 192)
+        self.assertIn('more', packet)
+        for day, source in ((20261101, 'AI TOTAL'), ('20261101\nPC:AI|CLAUDE', 'CODEX'), (0, 'CODEX')):
+            with self.assertRaises(ValueError):
+                ai_models_packet([], day, source)
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -70,6 +84,10 @@ class ClaudeUsageTests(unittest.TestCase):
         tokens, _, cost, label = sample.sample('claude', prices, self.now)
         self.assertEqual((tokens, cost, label), (311000, -1, 'CLAUDE'))
         self.assertEqual(sample.sample('codex', prices, self.now)[0], -1)
+        report = sample.details('claude', prices, self.now)
+        self.assertEqual((report['source'], report['tokens'], report['cost_fen']), ('CLAUDE', 311000, -1))
+        self.assertEqual(report['models'][0]['model'], 'unconfigured-model')
+        self.assertIsNone(report['models'][0]['cost_cny'])
 
     def test_source_switch_keeps_counts_and_costs_separate(self):
         self.write([self.event()])
@@ -91,6 +109,10 @@ class ClaudeUsageTests(unittest.TestCase):
             self.assertTrue(packet.startswith('PC:USAGE|' + label + '|'))
             self.assertNotIn('PC:AI|', packet)
             self.assertEqual(len(packet.splitlines()), 1)
+            report = reader.details(source, prices, self.now)
+            self.assertEqual((report['tokens'], report['cost_fen'], report['source']), expected)
+            self.assertEqual(len(report['models']), 1)
+            self.assertEqual(report['models'][0]['tokens'], expected[0])
         with self.assertRaises(ValueError):
             reader.sample('all', prices, self.now)
         with self.assertRaises(ValueError):

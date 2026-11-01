@@ -54,7 +54,9 @@ class DesktopSettingsTests(unittest.TestCase):
         self.assertEqual(result['usd_to_cny'], 7.1)
         self.assertEqual(result['models']['gpt-6-astra']['short']['input_per_million'], 2)
         self.assertIn('claude-fable-5-1', result['models'])
-        self.assertEqual(json.loads((self.root / 'codex_prices.before-2026-10-17.json').read_text()), old)
+        self.assertIn('gpt-5.6-luna', result['models'])
+        self.assertIn('gpt-5.4', result['models'])
+        self.assertEqual(json.loads((self.root / 'codex_prices.before-2026-11-01.json').read_text()), old)
 
     def test_upgrade_custom_prices_preserved(self):
         custom = dict(currency='CNY', usd_to_cny=7, models={'custom': dict(input_per_million=1)})

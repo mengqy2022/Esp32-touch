@@ -22,7 +22,7 @@ GAME、SYSTEM、OTHER 三个分类进入。Windows 配套 EXE 负责采集与发
 | 页面／程序 | 功能 |
 | --- | --- |
 | 主界面 | 日期、星期、Wi-Fi 状态、时钟；CPU/GPU/RAM 圆环、温度、内存用量。闲置时继续显示主页。 |
-| AI 用量卡片 | 在设备主页点选 CODEX／CLAUDE，独立查看今日用量并记住选择；左侧 Token、右侧 `~¥` 人民币估算金额，约每 5 秒更新，无每日限额。 |
+| AI 用量卡片 | 在设备主页点选 CODEX／CLAUDE，独立查看今日用量并记住选择；金额上方滚动显示模型名称，Token 与金额为所选来源各模型合计，约每 5 秒更新，无每日限额。 |
 | GAME | SUDOKU 数独、2048、FLAPPY、SNAKE 贪吃蛇、BREAKOUT 打砖块；统一暂停／继续和重新开始。 |
 | SYSTEM | PC SCREEN、SD CHECK、SYSTEM INFO、WIFI、CALIBRATE、PC DETAILS。 |
 | OTHER | SALARY CAT 月薪猫、INVENTORY 库存／BOM、VOCAB LAB 本地词书与学习计划、间隔复习、触屏默写。 |
@@ -31,6 +31,21 @@ GAME、SYSTEM、OTHER 三个分类进入。Windows 配套 EXE 负责采集与发
 工具的 BACK 返回对应分类，分类的 BACK 返回主页，PC DETAILS 点击返回主页。
 电脑数据需要 PC 配套程序持续运行；离线游戏和本地工具可独立使用。
 温度／GPU 读取依赖电脑硬件与驱动，不支持的数据显示 `--`。
+
+## 2026-11-01 更新：多模型计费与设备同步
+
+配套 EXE **2026.11.01.2** 和完整固件已更新到 [下载区](dist/README.md)。
+EXE 的 **AI 用量** 页面可查询今日各模型的输入、缓存、输出和人民币估算，按模型／长短上下文分别计价后合计；
+八个 GPT 模型使用使用者确认的截图标准价 ×20%，保留自定义价格与汇率，Claude 独立统计。
+设备主页金额上方同步模型名称，长列表横向滚动；触摸 CODEX／CLAUDE 时名称与合计一起切换。
+配套程序和固件需一起更新；列表表示今日产生用量的模型，不是实时并发会话或官方账单。
+
+| 设备主页：模型名称与合计 | 电脑端：各模型明细与总费用 |
+| --- | --- |
+| ![设备主页滚动显示今日模型](docs/images/device/home-models.png) | ![桌面 AI 用量模型明细](docs/images/device/ai-usage.png) |
+
+上图均为合成示例：设备图来自实际 LVGL 页面离屏渲染，电脑图来自真实 GUI 测试窗口，非个人用量。
+详细规则见 [统计与计价](docs/CODEX_USAGE_CN.md)，验收范围见 [验证记录](docs/VALIDATION.md)。
 
 ## 设备界面与操作图解
 
@@ -67,7 +82,7 @@ GAME、SYSTEM、OTHER 三个分类进入。Windows 配套 EXE 负责采集与发
 ## 本次更新：PC SCREEN 与游戏
 
 这是原有系统的新增功能，保留主页、AI 用量、库存和词书。
-当前配套 EXE 为 **2026.10.18.4**；旧设备需同时更新
+当前配套 EXE 为 **2026.11.01.2**；旧设备需同时更新
 [完整系统固件](dist/PC_SCREEN_FIRMWARE_CN.md)。
 
 1. 在 EXE 左侧进入 **PC SCREEN**，按窗口标题或进程名搜索，双击目标或点击“共享所选窗口”。

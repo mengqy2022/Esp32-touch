@@ -14,6 +14,7 @@ Wire protocol (ASCII lines, one per line, sent TO the device):
     PC:TIME|<unix seconds>              every 15 s (keeps the clock accurate)
     PC:STAT|<cpu%>|<gpu%>|<cpu_C>|<gpu_C>|<mem%>|<used_MB>|<total_MB>
     PC:USAGE|CODEX/CLAUDE|<today_tokens>|0|<YYYYMMDD>|<estimated_CNY_fen>
+    PC:MODELS|CODEX/CLAUDE|<YYYYMMDD>|<model names>
 
 Usage:
     pip install pyserial
@@ -41,7 +42,7 @@ import sys
 import time
 from pathlib import Path
 
-from ai_usage import AIUsage, SOURCES, ai_packet
+from ai_usage import AIUsage, SOURCES, ai_packet, ai_models_packet
 from pc_screen import Mirror
 from work_calendar import CalendarSync
 
@@ -452,8 +453,10 @@ def main(argv=None, stop_event=None):
                 if codex_line is None or now - last_codex_read >= args.codex_refresh:
                     packets = []
                     for source in SOURCES:
-                        tokens, day, cost, label = usage.sample(source, args.codex_prices)
+                        report = usage.details(source, args.codex_prices)
+                        tokens, day, cost, label = (report['tokens'], report['day'], report['cost_fen'], report['source'])
                         packets.append(ai_packet(tokens, day, cost, label))
+                        packets.append(ai_models_packet((row['model'] for row in report['models']), day, label))
                         print(f"{label}| today={tokens} tokens estimated_cny={'--' if cost < 0 else format(cost / 100, '.2f')} date={day}", flush=True)
                     codex_line = '\n'.join(packets)
                     last_codex_read = now

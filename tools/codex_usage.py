@@ -142,37 +142,58 @@ def usage_fields(usage):
     return result if all(type(v) is int and v >= 0 for v in result.values()) else None
 
 
-def estimate_cny_fen(by_model, price_file):
-    """Return rounded estimated fen, or -1 if any consumed tokens lack prices."""
+def estimate_cny_costs(by_model, price_file):
+    """Return (total fen, model/tier rows); round the combined total only once."""
     try:
         prices = json.loads(Path(price_file).read_text(encoding='utf-8-sig'))
         if prices.get('currency') not in ('CNY', 'USD'):
-            return -1
+            raise ValueError('Unsupported currency')
         exchange = Decimal(str(prices.get('usd_to_cny', 0))) if prices['currency'] == 'USD' else Decimal(1)
         if not exchange.is_finite() or exchange <= 0:
-            return -1
-        total = Decimal(0)
-        for model, counts in by_model.items():
-            if not any(counts.values()):
-                continue
-            model, tier = model.rsplit('|', 1)
+            raise ValueError('Invalid exchange rate')
+    except (OSError, ValueError, TypeError, AttributeError, InvalidOperation):
+        prices, exchange = {}, None
+    total, rows = Decimal(0), []
+    complete = bool(by_model) and exchange is not None
+    for key, counts in sorted(by_model.items()):
+        if not any(counts.values()):
+            continue
+        model, tier = key.rsplit('|', 1)
+        cost = None
+        try:
             rate = prices.get('models', {}).get(model) or prices.get('models', {}).get('*')
-            if not rate or counts['unpriced']:
-                return -1
+            if not rate or counts['unpriced'] or exchange is None:
+                raise ValueError('Missing price or usage details')
             rate = rate.get(tier, rate)
+            cost = Decimal(0)
             for field, tokens in [('input', counts['input'] - counts['cached'] - counts['cache_write']),
                                   ('cached_input', counts['cached']), ('cache_write_input', counts['cache_write']), ('output', counts['output'])]:
+                if tokens < 0:
+                    raise ValueError('Invalid token breakdown')
                 if tokens == 0:
                     continue
                 unit = Decimal(str(rate[field + '_per_million']))
                 if not unit.is_finite() or unit < 0:
-                    return -1
-                total += tokens * unit * exchange / 1_000_000
-        if not by_model:
-            return -1
-        return min((1 << 63) - 1, int((total * 100).quantize(Decimal(1), rounding=ROUND_HALF_UP)))
-    except (OSError, ValueError, TypeError, KeyError, InvalidOperation):
-        return -1
+                    raise ValueError('Invalid unit price')
+                cost += tokens * unit * exchange / 1_000_000
+        except (ValueError, TypeError, KeyError, AttributeError, InvalidOperation):
+            cost = None
+            complete = False
+        if cost is not None:
+            total += cost
+        rows.append(dict(model=model, tier=tier, **counts,
+                         tokens=counts['input'] + counts['output'] + counts['unpriced'],
+                         cost_cny=str(cost) if cost is not None else None))
+    try:
+        fen = min((1 << 63) - 1, int((total * 100).quantize(Decimal(1), rounding=ROUND_HALF_UP))) if complete else -1
+    except InvalidOperation:
+        fen = -1
+    return fen, rows
+
+
+def estimate_cny_fen(by_model, price_file):
+    """Return rounded estimated fen, or -1 if any consumed tokens lack prices."""
+    return estimate_cny_costs(by_model, price_file)[0]
 
 
 def codex_packet(tokens, goal, day, cost_fen=None):

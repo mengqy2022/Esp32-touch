@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from codex_usage import CodexUsage, codex_packet, estimate_cny_fen
+from codex_usage import CodexUsage, codex_packet, estimate_cny_fen, estimate_cny_costs
 
 
 class UsageTests(unittest.TestCase):
@@ -93,6 +93,65 @@ class UsageTests(unittest.TestCase):
         counts=self.reader.by_model.pop('gpt-6-astra|long')
         self.reader.by_model['unknown|long']=counts
         self.assertEqual(estimate_cny_fen(self.reader.by_model,Path(__file__).with_name('codex_prices.json')),-1)
+
+    def test_switching_models_in_one_session_prices_each_delta(self):
+        first = dict(input_tokens=100000, cached_input_tokens=50000, output_tokens=10000, total_tokens=110000)
+        second = dict(input_tokens=300000, cached_input_tokens=100000, output_tokens=10000, total_tokens=310000)
+        total = {key: first[key] + second[key] for key in first}
+        events = []
+        for model, usage, cumulative, context in (('gpt-6.1-sol', first, first, 272000),
+                                                   ('gpt-6-astra', second, total, 272001)):
+            events.append(dict(type='turn_context', payload=dict(model=model)))
+            event = json.loads(self.event(cumulative['total_tokens']))
+            event['payload']['info'] = dict(total_token_usage=cumulative, last_token_usage=usage, context_tokens=context)
+            events.append(event)
+        self.write(''.join(json.dumps(event) + '\n' for event in events))
+        self.assertEqual(self.reader.read(self.now)[0], 420000)
+        prices = Path(__file__).with_name('codex_prices.json')
+        cost, rows = estimate_cny_costs(self.reader.by_model, prices)
+        self.assertEqual(cost, 742)
+        self.assertEqual(sum(row['tokens'] for row in rows), 420000)
+        self.assertEqual({(r['model'], r['tier']): r['cost_cny'] for r in rows},
+                         {('gpt-6.1-sol', 'short'): '0.2952', ('gpt-6-astra', 'long'): '7.128'})
+        self.assertEqual(estimate_cny_fen(self.reader.by_model, prices), cost)
+
+    def test_model_totals_round_once_and_unknown_models_remain_visible(self):
+        prices = self.root / 'prices.json'
+        prices.write_text(json.dumps(dict(currency='CNY', models={
+            'a': dict(input_per_million=1), 'b': dict(input_per_million=1)})))
+        counts = dict(input=3000, cached=0, cache_write=0, output=0, unpriced=0)
+        cost, rows = estimate_cny_costs({'a|short': counts, 'b|long': counts}, prices)
+        self.assertEqual(cost, 1)  # 0.003 + 0.003 yuan, rounded only after summing.
+        self.assertEqual([r['cost_cny'] for r in rows], ['0.003', '0.003'])
+        cost, rows = estimate_cny_costs({'a|short': counts, 'unknown|short': counts}, prices)
+        self.assertEqual(cost, -1)
+        self.assertEqual(rows[0]['cost_cny'], '0.003')
+        self.assertIsNone(rows[1]['cost_cny'])
+        self.assertEqual(rows[1]['tokens'], 3000)
+        prices.write_text('{"currency":"USD","usd_to_cny":"NaN"}')
+        cost, rows = estimate_cny_costs({'a|short': counts}, prices)
+        self.assertEqual(cost, -1)
+        self.assertIsNone(rows[0]['cost_cny'])
+
+    def test_screenshot_gpt_rates_use_twenty_percent_without_inventing_cache_write(self):
+        from decimal import Decimal
+        models = json.loads(Path(__file__).with_name('codex_prices.json').read_text())['models']
+        standard = {
+            'gpt-6-astra': ([10, 1, 12.5, 50], [20, 2, 25, 75]),
+            'gpt-6.1-sol': ([2, .1, 2.5, 10], [4, .2, 5, 15]),
+            'gpt-6-sol': ([2, .2, 2.5, 10], [4, .4, 5, 15]),
+            'gpt-5.6-sol': ([5, .5, 6.25, 30], [10, 1, 12.5, 45]),
+            'gpt-5.6-terra': ([2, .2, 2.5, 12], [4, .4, 5, 18]),
+            'gpt-5.6-luna': ([.2, .02, .25, 1.2], [.4, .04, .5, 1.8]),
+        }
+        fields = ('input', 'cached_input', 'cache_write_input', 'output')
+        for model, tiers in standard.items():
+            for tier, rates in zip(('short', 'long'), tiers):
+                for field, rate in zip(fields, rates):
+                    self.assertEqual(Decimal(str(models[model][tier][field + '_per_million'])), Decimal(str(rate)) * Decimal('.2'))
+        for model, rates in (('gpt-5.5', (1, .1, 6)), ('gpt-5.4', (.5, .05, 3))):
+            self.assertEqual([models[model][field + '_per_million'] for field in ('input', 'cached_input', 'output')], list(rates))
+            self.assertNotIn('cache_write_input_per_million', models[model])
 
     def test_context_threshold_and_request_input_fallback(self):
         for context, expected in ((272000, 'short'), (272001, 'long'), (None, 'short')):
